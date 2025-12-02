@@ -149,6 +149,113 @@ class LLMProvider(ABC):
         """
         pass
     
+    def _extract_json_from_response(self, response: str) -> str:
+        """
+        Extract JSON from LLM response with robust handling of various formats.
+        
+        Handles:
+        - JSON wrapped in markdown code blocks (```json or ```)
+        - Extra whitespace and newlines
+        - Trailing/leading text
+        - Multiple JSON objects (takes first valid one)
+        
+        Args:
+            response: Raw LLM response
+            
+        Returns:
+            Cleaned JSON string
+        """
+        import re
+        
+        # Step 1: Basic cleanup
+        response = response.strip()
+        
+        # Step 2: Remove markdown code blocks
+        # Pattern: ```json ... ``` or ``` ... ```
+        code_block_pattern = r'```(?:json)?\s*([\s\S]*?)```'
+        code_blocks = re.findall(code_block_pattern, response)
+        if code_blocks:
+            # Use the first code block found
+            response = code_blocks[0].strip()
+        
+        # Step 3: Find JSON object boundaries
+        # Look for { ... } that could be valid JSON
+        json_pattern = r'\{[\s\S]*\}'
+        json_matches = re.findall(json_pattern, response)
+        
+        if json_matches:
+            # Try each match until we find valid JSON
+            for match in json_matches:
+                try:
+                    # Quick validation - try to parse it
+                    json.loads(match)
+                    response = match
+                    break
+                except json.JSONDecodeError:
+                    continue
+        
+        # Step 4: Remove common prefix/suffix patterns
+        # Remove leading/trailing quotes if present
+        if response.startswith('"') and response.endswith('"'):
+            response = response[1:-1]
+        if response.startswith("'") and response.endswith("'"):
+            response = response[1:-1]
+        
+        # Step 5: Unescape if needed
+        if '\\n' in response or '\\"' in response:
+            try:
+                # Try to decode as if it was escaped
+                response = response.encode().decode('unicode_escape')
+            except Exception:
+                pass
+        
+        # Step 6: Final cleanup
+        response = response.strip()
+        
+        return response
+    
+    def _aggressive_json_clean(self, response: str) -> str:
+        """
+        Aggressively clean response to extract JSON when normal methods fail.
+        
+        Args:
+            response: Raw LLM response
+            
+        Returns:
+            Cleaned JSON string
+        """
+        import re
+        
+        # Remove all markdown formatting
+        response = re.sub(r'```[a-z]*\n?', '', response)
+        response = re.sub(r'```', '', response)
+        
+        # Remove common text patterns before/after JSON
+        response = re.sub(r'^[^{]*', '', response)  # Remove everything before first {
+        response = re.sub(r'[^}]*$', '', response)  # Remove everything after last }
+        
+        # Find the outermost { ... } pair
+        start = response.find('{')
+        if start == -1:
+            return response
+        
+        # Count braces to find matching closing brace
+        brace_count = 0
+        end = start
+        for i in range(start, len(response)):
+            if response[i] == '{':
+                brace_count += 1
+            elif response[i] == '}':
+                brace_count -= 1
+                if brace_count == 0:
+                    end = i + 1
+                    break
+        
+        if end > start:
+            response = response[start:end]
+        
+        return response.strip()
+    
     def parse_document(self, content: str) -> Dict[str, Any]:
         """
         Parse a study document and extract structured information.
@@ -159,6 +266,11 @@ class LLMProvider(ABC):
         Returns:
             Dictionary containing topics, concepts, and metadata
         """
+        import logging
+        import re
+        
+        logger = logging.getLogger(__name__)
+        
         prompt = DOCUMENT_PARSE_PROMPT.format(content=content)
         response = self.generate(
             prompt=prompt,
@@ -167,20 +279,37 @@ class LLMProvider(ABC):
             max_tokens=3000
         )
         
+        # Store original response for debugging
+        original_response = response
+        
         try:
-            # Extract JSON from response (in case there's extra text)
-            response = response.strip()
-            if response.startswith("```json"):
-                response = response[7:]
-            if response.startswith("```"):
-                response = response[3:]
-            if response.endswith("```"):
-                response = response[:-3]
-            response = response.strip()
+            # Robust JSON extraction with multiple strategies
+            response = self._extract_json_from_response(response)
+            result = json.loads(response)
+            logger.info(f"Successfully parsed document structure with {len(result.get('topics', []))} topics")
+            return result
             
-            return json.loads(response)
-        except json.JSONDecodeError as e:
-            raise ValueError(f"Failed to parse LLM response as JSON: {e}\nResponse: {response}")
+        except (json.JSONDecodeError, KeyError, ValueError, TypeError) as e:
+            logger.error(f"Failed to parse LLM response (error type: {type(e).__name__}): {e}")
+            logger.error(f"Original response (first 1000 chars): {original_response[:1000]}")
+            logger.error(f"Cleaned response (first 1000 chars): {response[:1000]}")
+            
+            # Try one more time with aggressive cleaning
+            try:
+                response = self._aggressive_json_clean(original_response)
+                result = json.loads(response)
+                logger.info("Successfully parsed after aggressive cleaning")
+                return result
+            except Exception as retry_error:
+                logger.error(f"Aggressive cleaning also failed (error type: {type(retry_error).__name__}): {retry_error}")
+                logger.error(f"Final cleaned response: {response[:1000]}")
+                raise ValueError(
+                    f"Failed to parse LLM response as JSON after multiple attempts.\n"
+                    f"Original error type: {type(e).__name__}\n"
+                    f"Original error: {e}\n"
+                    f"Original response (first 800 chars): {original_response[:800]}\n"
+                    f"Cleaned response (first 800 chars): {response[:800]}"
+                )
 
     # Contracts used by pipeline
     def extract_topics(self, raw_text: str) -> List[Dict[str, Any]]:
@@ -208,6 +337,10 @@ class LLMProvider(ABC):
         Returns:
             List of problem dictionaries
         """
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        
         prompt = PROBLEM_GENERATION_PROMPT.format(
             topic=topic,
             num_problems=num_problems,
@@ -221,21 +354,31 @@ class LLMProvider(ABC):
             max_tokens=3000
         )
         
+        original_response = response
+        
         try:
-            # Extract JSON from response
-            response = response.strip()
-            if response.startswith("```json"):
-                response = response[7:]
-            if response.startswith("```"):
-                response = response[3:]
-            if response.endswith("```"):
-                response = response[:-3]
-            response = response.strip()
-            
+            # Use robust JSON extraction
+            response = self._extract_json_from_response(response)
             data = json.loads(response)
             return data.get("problems", [])
+            
         except json.JSONDecodeError as e:
-            raise ValueError(f"Failed to parse LLM response as JSON: {e}\nResponse: {response}")
+            logger.error(f"Failed to parse problem generation response: {e}")
+            logger.error(f"Original response: {original_response[:500]}...")
+            
+            # Try aggressive cleaning
+            try:
+                response = self._aggressive_json_clean(original_response)
+                data = json.loads(response)
+                logger.info("Successfully parsed after aggressive cleaning")
+                return data.get("problems", [])
+            except Exception as retry_error:
+                logger.error(f"Aggressive cleaning also failed: {retry_error}")
+                raise ValueError(
+                    f"Failed to parse problem generation response.\n"
+                    f"Original error: {e}\n"
+                    f"Response (first 500 chars): {original_response[:500]}"
+                )
     
     def evaluate_answer(
         self,
@@ -254,6 +397,10 @@ class LLMProvider(ABC):
         Returns:
             Dictionary containing evaluation results and feedback
         """
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        
         prompt = ANSWER_EVALUATION_PROMPT.format(
             problem=problem,
             correct_answer=correct_answer or "Not provided - evaluate based on problem requirements",
@@ -267,20 +414,30 @@ class LLMProvider(ABC):
             max_tokens=2000
         )
         
+        original_response = response
+        
         try:
-            # Extract JSON from response
-            response = response.strip()
-            if response.startswith("```json"):
-                response = response[7:]
-            if response.startswith("```"):
-                response = response[3:]
-            if response.endswith("```"):
-                response = response[:-3]
-            response = response.strip()
-            
+            # Use robust JSON extraction
+            response = self._extract_json_from_response(response)
             return json.loads(response)
+            
         except json.JSONDecodeError as e:
-            raise ValueError(f"Failed to parse LLM response as JSON: {e}\nResponse: {response}")
+            logger.error(f"Failed to parse answer evaluation response: {e}")
+            logger.error(f"Original response: {original_response[:500]}...")
+            
+            # Try aggressive cleaning
+            try:
+                response = self._aggressive_json_clean(original_response)
+                result = json.loads(response)
+                logger.info("Successfully parsed after aggressive cleaning")
+                return result
+            except Exception as retry_error:
+                logger.error(f"Aggressive cleaning also failed: {retry_error}")
+                raise ValueError(
+                    f"Failed to parse answer evaluation response.\n"
+                    f"Original error: {e}\n"
+                    f"Response (first 500 chars): {original_response[:500]}"
+                )
 
     def evaluate_response(self, problem: Dict[str, Any], user_answer: str) -> Dict[str, Any]:
         """Evaluate based on problem object.

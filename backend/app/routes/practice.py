@@ -359,7 +359,10 @@ def submit_answer(current_user):
         if not topic_progress:
             topic_progress = TopicProgress(
                 user_id=current_user.id,
-                topic_id=problem.topic_id
+                topic_id=problem.topic_id,
+                problems_attempted=0,
+                problems_correct=0,
+                current_confidence=0.0
             )
             db.session.add(topic_progress)
         

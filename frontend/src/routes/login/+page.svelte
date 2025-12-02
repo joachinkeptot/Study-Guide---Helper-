@@ -25,7 +25,7 @@
 			// Redirect to dashboard
 			goto('/dashboard');
 		} catch (err) {
-			error = err.message || 'Login failed. Please check your credentials.';
+			error = err instanceof Error ? err.message : 'Login failed. Please check your credentials.';
 		} finally {
 			loading = false;
 		}
