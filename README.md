@@ -188,30 +188,38 @@ The backend will be available at `http://localhost:5000`
 
 ## 🚢 Deployment
 
-### Frontend (Vercel)
+### Production Deployment
 
-The frontend is configured for Vercel deployment:
+For complete deployment instructions, see **[DEPLOYMENT.md](./DEPLOYMENT.md)** which covers:
 
-1. Connect your GitHub repository to Vercel
-2. Set the root directory to `frontend`
-3. Vercel will automatically detect SvelteKit and configure the build settings
-4. Add environment variables in Vercel dashboard
-5. Deploy!
+- 🗄️ **Database**: Supabase PostgreSQL setup
+- 🚂 **Backend**: Railway or Render deployment
+- ⚡ **Frontend**: Vercel deployment
+- 🔐 **Security**: Environment variables and CORS configuration
+- 🔄 **Migrations**: Database setup and updates
+- 🐛 **Troubleshooting**: Common issues and solutions
 
-### Backend
+### Quick Deploy Links
 
-The backend can be deployed to various platforms:
+- **Frontend (Vercel)**: [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/yourusername/Study-Guide-Helper&project-name=study-guide-helper&root-directory=frontend)
+- **Backend (Railway)**: [![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template)
 
-- **Heroku**: Use the Procfile pattern
-- **Railway**: Auto-detects Flask applications
-- **AWS/GCP/Azure**: Use Docker or platform-specific deployment methods
+### Local Development with Docker
 
-Make sure to:
+For the easiest local setup with all services (database, backend, frontend):
 
-- Set all environment variables
-- Use a production database (PostgreSQL recommended)
-- Set `FLASK_ENV=production`
-- Use a proper WSGI server like Gunicorn
+```bash
+# Start all services
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop services
+docker-compose down
+```
+
+See **[DOCKER_GUIDE.md](./DOCKER_GUIDE.md)** for more Docker commands.
 
 ## 🔧 Development
 
@@ -250,27 +258,9 @@ npm run preview  # Preview production build
 
 ### Frontend (.env)
 
-```
-VITE_API_BASE_URL=http://localhost:5000
-```
-
-### Backend (.env)
-
-````
-FLASK_APP=run.py
-FLASK_ENV=development
-SECRET_KEY=your-secret-key-here
-JWT_SECRET_KEY=your-jwt-secret-key
-DATABASE_URL=sqlite:///instance/app.db
-``` Backend (.env)
-
-````
-
-FLASK_APP=run.py
-FLASK_ENV=development
-SECRET_KEY=your-secret-key-here
-DATABASE_URL=sqlite:///app.db
-
+```env
+PUBLIC_API_URL=http://localhost:5000
+PUBLIC_DEBUG=true
 ```
 
 ## 📄 License
@@ -280,4 +270,31 @@ This project is open source and available under the MIT License.
 ## 🤝 Contributing
 
 Contributions, issues, and feature requests are welcome!
-```
+
+````
+### Backend (.env)
+
+```env
+FLASK_ENV=development
+SECRET_KEY=dev-secret-key-change-in-production
+JWT_SECRET_KEY=dev-jwt-secret-key
+DATABASE_URL=sqlite:///app.db
+CORS_ORIGINS=http://localhost:5173
+````
+
+See `.env.example` files in each directory for complete variable lists.
+
+## 📚 Documentation
+
+- **[DEPLOYMENT.md](./DEPLOYMENT.md)** - Complete deployment guide
+- **[DOCKER_GUIDE.md](./DOCKER_GUIDE.md)** - Docker Compose commands
+- **[backend/README.md](./backend/README.md)** - Backend API documentation
+- **[frontend/README.md](./frontend/README.md)** - Frontend documentation
+
+## 📄 License
+
+This project is open source and available under the MIT License.
+
+## 🤝 Contributing
+
+Contributions, issues, and feature requests are welcome!

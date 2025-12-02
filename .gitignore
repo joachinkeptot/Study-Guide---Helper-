@@ -21,6 +21,11 @@ venv.bak/
 .env
 .env.local
 .env.*.local
+.env.production
+.env.development
+
+# Keep example files
+!.env.example
 
 # Build output
 dist/
@@ -32,6 +37,11 @@ build/
 *.db
 *.sqlite
 *.sqlite3
+instance/
+backup*.sql
+
+# Docker
+docker-compose.override.yml
 
 # Testing
 coverage/

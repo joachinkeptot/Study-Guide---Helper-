@@ -66,16 +66,26 @@ backend/
 │   ├── main/                # Main blueprint (health checks, etc.)
 │   │   ├── __init__.py
 │   │   └── routes.py
-│   └── api/                 # API blueprint (REST endpoints)
-│       ├── __init__.py
-│       ├── users.py
-│       ├── study_guides.py
-│       ├── topics.py
-│       ├── problems.py
-│       └── practice.py
+│   ├── api/                 # API blueprint (REST endpoints)
+│   │   ├── __init__.py
+│   │   ├── users.py
+│   │   ├── study_guides.py
+│   │   ├── topics.py
+│   │   ├── problems.py
+│   │   └── practice.py
+│   └── services/            # Business logic services
+│       ├── problem_selector.py      # Spaced repetition algorithm
+│       ├── document_parser.py       # Document parsing
+│       └── llm_adapter.py          # LLM integration
+├── tests/                   # Test suite
+│   ├── __init__.py
+│   ├── test_problem_selector.py    # Problem selector tests
+│   └── README.md
 ├── migrations/              # Database migrations
 ├── run.py                   # Application entry point
 ├── init_db.py              # Database initialization script
+├── run_tests.sh            # Test runner script
+├── pytest.ini              # Pytest configuration
 ├── requirements.txt         # Python dependencies
 └── .env.example            # Environment variables template
 ```
@@ -138,15 +148,74 @@ backend/
 - **ProblemAttempt**: Individual problem attempts (`id`, `session_id`, `problem_id`, `user_answer`, `is_correct`, `confidence_rating`, `feedback`, `attempted_at`)
 - **TopicProgress**: User progress tracking (`id`, `user_id`, `topic_id`, `problems_attempted`, `problems_correct`, `current_confidence`, `mastered`, `last_practiced`)
 
+## Services
+
+### Problem Selector Service
+
+Intelligent problem selection using spaced repetition algorithm:
+
+- **Adaptive Learning**: Prioritizes topics with lower confidence
+- **Spaced Repetition**: Factors in time since last attempt
+- **Smart Selection**: Balances new problems vs review
+- **Confidence Tracking**: Uses exponential moving average
+- **Session Management**: Avoids immediate repetition
+
+See `app/services/PROBLEM_SELECTOR_DOCUMENTATION.md` for detailed documentation.
+
+**Quick Start:**
+
+```python
+from app.services.problem_selector import get_next_problem, update_confidence
+
+# Get next problem for user
+problem, topic = get_next_problem(user_id=1, session_id=5, topic_ids=[10, 11])
+
+# Update confidence after attempt
+progress = update_confidence(
+    user_id=1,
+    topic_id=10,
+    was_correct=True,
+    user_confidence=3
+)
+```
+
+## Testing
+
+Run the test suite:
+
+```bash
+# Run all tests
+./run_tests.sh
+
+# Run specific tests
+./run_tests.sh selector
+
+# Run with coverage
+./run_tests.sh coverage
+
+# Quick run (stops at first failure)
+./run_tests.sh quick
+```
+
+Or use pytest directly:
+
+```bash
+pytest -v                           # All tests
+pytest tests/test_problem_selector.py -v   # Specific file
+pytest --cov=app --cov-report=html  # With coverage
+```
+
 ## Features
 
 - ✅ Comprehensive relational database schema with 7 models
 - ✅ Strategic indexes for query performance
 - ✅ Automatic progress tracking and mastery detection
+- ✅ Spaced repetition algorithm for adaptive learning
 - ✅ Password hashing with Werkzeug
 - ✅ JSON fields for flexible data storage
 - ✅ Enum types for problem categorization
 - ✅ Cascading deletes for data integrity
+- ✅ Comprehensive test suite with pytest
 
 ## Environment Variables
 
