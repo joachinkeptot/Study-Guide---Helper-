@@ -32,41 +32,36 @@ async function apiFetch(endpoint, options = {}) {
   // Construct full URL
   const url = endpoint.startsWith("http") ? endpoint : `${BASE_URL}${endpoint}`;
 
-  try {
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
+  const response = await fetch(url, {
+    ...options,
+    headers,
+  });
 
-    // Handle 401 Unauthorized
-    if (response.status === 401) {
-      // Clear auth state
-      auth.logout();
+  // Handle 401 Unauthorized
+  if (response.status === 401) {
+    // Clear auth state
+    auth.logout();
 
-      // Redirect to login if in browser
-      if (browser) {
-        goto("/login");
-      }
-
-      throw new Error("Unauthorized - please log in again");
+    // Redirect to login if in browser
+    if (browser) {
+      goto("/login");
     }
 
-    // Handle other error responses
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(
-        errorData.error ||
-          errorData.message ||
-          `HTTP error! status: ${response.status}`
-      );
-    }
-
-    // Return parsed JSON response
-    return await response.json();
-  } catch (error) {
-    // Re-throw the error for the caller to handle
-    throw error;
+    throw new Error("Unauthorized - please log in again");
   }
+
+  // Handle other error responses
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.error ||
+        errorData.message ||
+        `HTTP error! status: ${response.status}`
+    );
+  }
+
+  // Return parsed JSON response
+  return await response.json();
 }
 
 /**

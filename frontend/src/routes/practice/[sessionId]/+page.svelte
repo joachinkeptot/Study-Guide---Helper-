@@ -92,7 +92,7 @@
 			}
 			const response = await api.post('/api/practice/end', { session_id: parseInt(sessionId) });
 			sessionSummary = response.summary;
-		} catch (err) {
+		} catch {
 			// Fallback summary if endpoint fails
 			sessionSummary = {
 				total_problems: currentProblemIndex,
@@ -132,11 +132,9 @@
 	}
 
 	/**
-	 * @param {CustomEvent<{ problemId: number }>} event
+	 * Handle hint request from practice session component
 	 */
-	async function handleHintRequest(event) {
-		const { problemId } = event.detail;
-
+	async function handleHintRequest() {
 		if (!practiceSessionComponent || !sessionId) return;
 
 		try {
@@ -169,11 +167,9 @@
 	}
 
 	/**
-	 * @param {CustomEvent<{ confidence: number }>} event
+	 * Handle loading next problem
 	 */
-	async function handleNextProblem(event) {
-		const { confidence } = event.detail;
-
+	async function handleNextProblem() {
 		// Optionally send confidence rating to backend
 		// Note: Backend expects attempt_id, not problem_id
 		// This feature may not work correctly without storing the last attempt_id

@@ -5,6 +5,7 @@
 	import { auth } from '$stores/auth';
 	import api from '$lib/api';
 
+	/** @type {{ id: number; title: string; description?: string; content?: string; created_at: string; topic?: string } | null} */
 	let guide = null;
 	let loading = true;
 	let error = '';
@@ -24,13 +25,16 @@
 			const response = await api.get(`/api/guides/${guideId}`);
 			guide = response.guide || response;
 		} catch (err) {
-			error = err.message || 'Failed to load study guide';
+			const errorMessage = err instanceof Error ? err.message : 'Failed to load study guide';
+			error = errorMessage;
 		} finally {
 			loading = false;
 		}
 	});
 
 	async function startPractice() {
+		if (!guideId) return;
+		
 		startingPractice = true;
 		try {
 			const response = await api.post('/api/practice/start', {
@@ -39,12 +43,16 @@
 			const sessionData = response.session || response;
 			goto(`/practice/${sessionData.id}`);
 		} catch (err) {
-			error = err.message || 'Failed to start practice session';
+			const errorMessage = err instanceof Error ? err.message : 'Failed to start practice session';
+			error = errorMessage;
 		} finally {
 			startingPractice = false;
 		}
 	}
 
+	/**
+	 * @param {string} dateString
+	 */
 	function formatDate(dateString) {
 		return new Date(dateString).toLocaleDateString('en-US', {
 			year: 'numeric',

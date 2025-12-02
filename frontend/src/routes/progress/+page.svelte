@@ -45,14 +45,6 @@
 		});
 	}
 
-	/**
-	 * @param {number} correct
-	 * @param {number} total
-	 */
-	function calculateAccuracy(correct, total) {
-		if (!total) return 0;
-		return Math.round((correct / total) * 100);
-	}
 </script>
 
 <svelte:head>

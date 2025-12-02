@@ -1,8 +1,4 @@
 <script>
-	import { createEventDispatcher } from 'svelte';
-
-	const dispatch = createEventDispatcher();
-
 	/** @type {Array<{ session_id: number; guide_title: string; topic: string; problems_attempted: number; correct_answers: number; session_date: string; duration_minutes: number }>} */
 	export let sessions;
 
