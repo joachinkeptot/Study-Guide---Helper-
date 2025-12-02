@@ -60,9 +60,11 @@
 		}
 	}
 
+	// Normalize type and parse options safely
+	$: normalizedType = (problem?.problem_type || '').toLowerCase();
 	$: parsedOptions = problem.options && typeof problem.options === 'string' 
 		? JSON.parse(problem.options) 
-		: problem.options || [];
+		: (problem.options || []);
 
 	$: canSubmit = answer.trim().length > 0;
 
@@ -88,7 +90,7 @@
 
 	<!-- Answer Input -->
 	<div class="mb-6">
-		{#if problem.problem_type === 'multiple_choice'}
+		{#if normalizedType === 'multiple_choice' && parsedOptions.length > 0}
 			<div class="space-y-3">
 				{#each parsedOptions as option, index}
 					<button
@@ -118,7 +120,7 @@
 			</div>
 			<p class="text-xs text-gray-500 mt-3">💡 Tip: Press 1-{parsedOptions.length} to select</p>
 
-		{:else if problem.problem_type === 'short_answer'}
+		{:else if normalizedType === 'short_answer'}
 			<div>
 				<input
 					type="text"
@@ -133,7 +135,7 @@
 				<p class="text-xs text-gray-500 mt-2">💡 Tip: Press Enter to submit</p>
 			</div>
 
-		{:else if problem.problem_type === 'free_response'}
+		{:else if normalizedType === 'free_response'}
 			<div>
 				<textarea
 					bind:value={answer}
@@ -146,6 +148,20 @@
 						transition-all text-gray-900 placeholder-gray-400"
 				></textarea>
 				<p class="text-xs text-gray-500 mt-2">💡 Tip: Use Shift+Enter for new lines</p>
+			</div>
+		{:else}
+			<div>
+				<input
+					type="text"
+					bind:value={answer}
+					disabled={disabled}
+					placeholder="Type your answer..."
+					class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg
+						focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2
+						disabled:opacity-60 disabled:cursor-not-allowed
+						transition-all text-gray-900 placeholder-gray-400"
+				/>
+				<p class="text-xs text-gray-500 mt-2">Unknown problem type; using short answer.</p>
 			</div>
 		{/if}
 	</div>

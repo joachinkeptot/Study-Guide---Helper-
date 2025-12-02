@@ -31,6 +31,13 @@
 
 	onMount(async () => {
 		if (!$auth.isAuthenticated) return;
+		// Initialize lightweight session object so PracticeSession renders
+		if (sessionId !== undefined) {
+			session = { id: parseInt(sessionId) };
+		} else {
+			error = 'Session ID is missing.';
+			return;
+		}
 		await loadSession();
 	});
 
@@ -59,18 +66,30 @@
 			}
 		} catch (err) {
 			const errorMsg = (/** @type {Error} */ (err)).message;
-			if (errorMsg && (errorMsg.includes('completed') || errorMsg.includes('No problems available'))) {
-				// Session completed - load summary
-				await loadSessionSummary();
-			} else {
-				error = errorMsg || 'Failed to load next problem';
+			// If there are no problems available for selected topics, show a friendly empty state
+			if (errorMsg && errorMsg.includes('No problems available')) {
+				error = 'No practice problems are available for this study guide/topics yet. Try selecting a different guide or add problems.';
+				currentProblem = null;
+				return;
 			}
+			// If the session was already ended, do not auto-complete; surface the error
+			if (errorMsg && errorMsg.includes('already ended')) {
+				error = 'This session has already ended. Start a new session from the dashboard.';
+				currentProblem = null;
+				return;
+			}
+			// For other errors
+			error = errorMsg || 'Failed to load next problem';
 		}
 	}
 
 	async function loadSessionSummary() {
 		try {
 			// End the session to get summary
+			if (sessionId === undefined) {
+				error = 'Session ID is missing.';
+				return;
+			}
 			const response = await api.post('/api/practice/end', { session_id: parseInt(sessionId) });
 			sessionSummary = response.summary;
 		} catch (err) {
@@ -90,6 +109,10 @@
 		const { problemId, answer, hintsUsed = 0 } = event.detail;
 
 		try {
+			if (sessionId === undefined) {
+				error = 'Session ID is missing.';
+				return;
+			}
 			const feedback = await api.post('/api/practice/submit', {
 				session_id: parseInt(sessionId),
 				problem_id: problemId,
@@ -162,6 +185,10 @@
 
 	async function handleEndSession() {
 		try {
+			if (sessionId === undefined) {
+				error = 'Session ID is missing.';
+				return;
+			}
 			await api.post('/api/practice/end', { session_id: parseInt(sessionId) });
 			await loadSessionSummary();
 		} catch (err) {
@@ -212,7 +239,7 @@
 			on:continue={handleContinueStudying}
 			on:dashboard={handleBackToDashboard}
 		/>
-	{:else if session && currentProblem}
+	{:else if currentProblem}
 		<PracticeSession
 			bind:this={practiceSessionComponent}
 			{currentTopic}

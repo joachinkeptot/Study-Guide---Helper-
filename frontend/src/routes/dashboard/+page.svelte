@@ -19,10 +19,7 @@
 	let selectedGuide = null;
 	let loadingDetail = false;
 
-	// Protect route - redirect if not authenticated
-	$: if (!$auth.isAuthenticated) {
-		goto('/login');
-	}
+	// Protect route - redirect on client after mount
 
 	onMount(async () => {
 		if (!$auth.isAuthenticated) return;

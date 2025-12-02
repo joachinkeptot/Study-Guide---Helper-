@@ -170,3 +170,74 @@ Or disable AirPlay Receiver in macOS System Settings.
 4. Add file upload for study guides
 5. Implement spaced repetition algorithm
 6. Add analytics and reporting
+
+---
+
+## 🚀 Proposed Additions for Upload → Topic → Practice Pipeline
+
+These additions align with `ARCHITECTURE.md` and extended `API_DOCUMENTATION.md`.
+
+### New Models
+
+8. **SourceDocument**
+
+   - `id` (Primary Key)
+   - `user_id` (Foreign Key → User)
+   - `original_filename`
+   - `mime_type`
+   - `content_hash` (Indexed, for deduplication)
+   - `text_excerpt` (Text, first N chars for preview)
+   - `created_at`
+   - Index: `(user_id, created_at)`
+
+9. **KeyConcept**
+
+   - `id` (Primary Key)
+   - `topic_id` (Foreign Key → Topic)
+   - `name`
+   - `summary` (Text)
+   - Index: `(topic_id, name)`
+
+10. **AdaptiveProblemMeta** (optional, to track generation context)
+
+- `id` (Primary Key)
+- `problem_id` (Foreign Key → Problem)
+- `generated_by` (Enum: llm|curated)
+- `prompt_signature` (Text or hash)
+- `target_concepts` (JSON: [concept_ids])
+- `target_difficulty` (Float 0–1)
+- `model_version` (String)
+- Index: `(problem_id)`
+
+11. **ConceptConfidence** (optional, per-concept tracking)
+
+- `id` (Primary Key)
+- `user_id` (Foreign Key → User)
+- `concept_id` (Foreign Key → KeyConcept)
+- `ema_confidence` (Float 0.0–1.0)
+- `last_updated`
+- Unique: `(user_id, concept_id)`
+
+### Changes to Existing Models
+
+- **Topic**: add `confidence_score` (Float), `mastered_at` (Datetime, nullable)
+- **Problem**: add `metadata` (JSON) with `{ difficulty: float, concept_ids: [int] }`
+- **ProblemAttempt**: add `hints_used_count` (Integer, default 0)
+
+### Migration Outline
+
+- Create tables: `source_document`, `key_concept` (+ FKs, indexes)
+- Add columns: `topic.confidence_score`, `topic.mastered_at`, `problem.metadata`, `problem_attempt.hints_used_count`
+- Optional tables: `adaptive_problem_meta`, `concept_confidence`
+
+### Confidence & Mastery Logic
+
+- Topic confidence updated via EMA after each `ProblemAttempt`
+- Mastery when rolling confidence ≥ threshold (e.g., 0.85) sustained over last K attempts and coverage across concepts ≥ minimum
+
+### Endpoint Mapping
+
+- `POST /api/upload` → creates `SourceDocument`
+- `POST /api/extract-topics` → persists `Topic` + `KeyConcept`
+- `POST /api/practice/sessions` → existing, topic-based
+- `POST /api/practice/{session_id}/evaluate` → updates `ProblemAttempt`, `TopicProgress`, and `Topic.confidence_score`

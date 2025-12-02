@@ -8,7 +8,7 @@ This module provides a unified interface for interacting with different LLM prov
 import os
 import json
 from abc import ABC, abstractmethod
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, TypedDict
 import requests
 
 
@@ -181,6 +181,15 @@ class LLMProvider(ABC):
             return json.loads(response)
         except json.JSONDecodeError as e:
             raise ValueError(f"Failed to parse LLM response as JSON: {e}\nResponse: {response}")
+
+    # Contracts used by pipeline
+    def extract_topics(self, raw_text: str) -> List[Dict[str, Any]]:
+        """Alias to parse_document returning topics list.
+
+        Returns a list of topic dicts with keys: name/title, description, key_concepts, subtopics.
+        """
+        data = self.parse_document(raw_text)
+        return data.get("topics", [])
     
     def generate_problems(
         self,
@@ -272,6 +281,34 @@ class LLMProvider(ABC):
             return json.loads(response)
         except json.JSONDecodeError as e:
             raise ValueError(f"Failed to parse LLM response as JSON: {e}\nResponse: {response}")
+
+    def evaluate_response(self, problem: Dict[str, Any], user_answer: str) -> Dict[str, Any]:
+        """Evaluate based on problem object.
+
+        Returns dict with keys: correct(bool), score(float 0-1), feedback(str), concept_ids(list[int]), confidence_delta(float).
+        """
+        eval_data = self.evaluate_answer(
+            problem=json.dumps(problem),
+            user_answer=user_answer,
+            correct_answer=problem.get("correct_answer")
+        )
+
+        # Normalize to pipeline schema
+        correct = bool(eval_data.get("is_correct", False))
+        score_raw = eval_data.get("score", 0)
+        score = (score_raw / 100.0) if isinstance(score_raw, (int, float)) else 0.0
+        feedback = eval_data.get("feedback") or eval_data.get("explanation") or ""
+        concept_ids = problem.get("metadata", {}).get("concept_ids", [])
+        # Simple confidence delta heuristic; can be replaced by selector service
+        confidence_delta = 0.1 * score if correct else -0.05
+
+        return {
+            "correct": correct,
+            "score": score,
+            "feedback": feedback,
+            "concept_ids": concept_ids,
+            "confidence_delta": confidence_delta,
+        }
 
 
 # ============================================================================

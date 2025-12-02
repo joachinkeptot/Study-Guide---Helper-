@@ -189,3 +189,47 @@ await authAPI.logout();
 - Frontend README: `/frontend/README.md`
 - Root README: `/README.md`
 - API Documentation: `/backend/API_DOCUMENTATION.md`
+
+---
+
+## 🔌 Adaptive Practice Flow Hooks
+
+These notes outline how the frontend integrates the new upload → topics → practice pipeline.
+
+- Upload page posts to `/api/upload`, then `/api/extract-topics` to populate topics.
+- Dashboard reads `/api/topics` and shows confidence/mastery badges.
+- Topic card "Start Practicing" calls `POST /api/practice/sessions` with `topic_id`, receives `session_id` + first `problem`.
+- `routes/practice/[sessionId]/+page.svelte` renders `ProblemDisplay.svelte` for interactive loop.
+
+### `ProblemDisplay.svelte` responsibilities
+
+- Render problem prompt and choices (if `multiple_choice`).
+- Submit answer via `POST /api/practice/{session_id}/evaluate`.
+- Show feedback (`correct`, `score`, `feedback`) and concept tags (`problem.metadata.concept_ids`).
+- Request next problem via `POST /api/practice/{session_id}/next`.
+- Optional: reveal progressive hints via `POST /api/practice/hint` and track `hints_used_count` locally.
+
+### Minimal client helpers (`src/lib/api.js`)
+
+```js
+export async function startSession(topicId) {
+  return api.post(`/api/practice/sessions`, { topic_id: topicId });
+}
+
+export async function evaluate(sessionId, problemId, userAnswer) {
+  return api.post(`/api/practice/${sessionId}/evaluate`, {
+    problem_id: problemId,
+    user_answer: userAnswer,
+  });
+}
+
+export async function nextProblem(sessionId) {
+  return api.post(`/api/practice/${sessionId}/next`, {});
+}
+```
+
+### UI Signals
+
+- Confidence bar per topic (0–1) with mastery indicator.
+- Session summary on end with accuracy and concept coverage.
+- Graceful error states for missing/ended sessions.

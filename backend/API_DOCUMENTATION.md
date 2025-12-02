@@ -541,6 +541,181 @@ const hint4 = await api.post("/api/practice/hint", {
 
 ---
 
+## Topic Extraction & Upload Routes (`/api`)
+
+These routes enable the pipeline from uploaded documents to extracted topics and concepts.
+
+### Upload Source Document
+
+**POST** `/upload`
+
+Upload a study document (PDF, DOCX, TXT, MD, image).
+
+**Request (multipart/form-data):**
+
+- `file`: Required
+
+**Response (201):**
+
+```json
+{ "source_document_id": "doc_abc123" }
+```
+
+**Errors:** `400` invalid file, `422` parse failed
+
+---
+
+### Extract Topics from Document
+
+**POST** `/extract-topics`
+
+Run LLM topic extraction on an uploaded document.
+
+**Request Body:**
+
+```json
+{ "source_document_id": "doc_abc123" }
+```
+
+**Response (200):**
+
+```json
+{
+  "topics": [
+    {
+      "id": 101,
+      "title": "Photosynthesis",
+      "description": "Overview ...",
+      "concepts": [
+        { "id": 1001, "name": "Light Reactions", "summary": "..." },
+        { "id": 1002, "name": "Calvin Cycle", "summary": "..." }
+      ]
+    }
+  ]
+}
+```
+
+---
+
+### List Topics
+
+**GET** `/topics`
+
+List topics with confidence and mastery state.
+
+**Response (200):**
+
+```json
+[
+  {
+    "id": 101,
+    "title": "Photosynthesis",
+    "confidence": 0.62,
+    "mastered": false
+  }
+]
+```
+
+---
+
+### Start Practice Session for Topic
+
+**POST** `/practice/sessions`
+
+Start a session for a single topic.
+
+**Request Body:**
+
+```json
+{ "topic_id": 101 }
+```
+
+**Response (201):**
+
+```json
+{
+  "session_id": 555,
+  "problem": {
+    /* see Problem type below */
+  }
+}
+```
+
+---
+
+### Next Problem (Adaptive)
+
+**POST** `/practice/{session_id}/next`
+
+Return the next adaptively selected problem.
+
+**Response (200):**
+
+```json
+{
+  "problem": {
+    /* see Problem type below */
+  }
+}
+```
+
+---
+
+### Evaluate Answer
+
+**POST** `/practice/{session_id}/evaluate`
+
+Evaluate an answer via LLM, update confidence.
+
+**Request Body:**
+
+```json
+{ "problem_id": 987, "user_answer": "..." }
+```
+
+**Response (200):**
+
+```json
+{
+  "correct": true,
+  "score": 0.9,
+  "feedback": "Great explanation of the Calvin Cycle.",
+  "concept_ids": [1002],
+  "confidence_delta": 0.08
+}
+```
+
+---
+
+### Complete Topic (Optional)
+
+**POST** `/topics/{topic_id}/complete`
+
+Check mastery and finalize.
+
+**Response (200):**
+
+```json
+{ "mastered": true, "confidence": 0.87 }
+```
+
+---
+
+### Types
+
+```json
+// Problem
+{
+  "id": 987,
+  "topic_id": 101,
+  "type": "multiple_choice" | "short" | "long",
+  "question_text": "Describe the chloroplast structure.",
+  "options": ["A", "B", "C", "D"],
+  "explanation": null,
+  "metadata": { "difficulty": 0.5, "concept_ids": [1002] }
+}
+```
+
 ## Progress Routes (`/api/progress`)
 
 ### Get Progress Overview

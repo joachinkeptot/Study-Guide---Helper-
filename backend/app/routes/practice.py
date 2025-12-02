@@ -53,6 +53,128 @@ def start_practice_session(current_user):
         
         db.session.add(session)
         db.session.commit()
+
+        # Auto-generate problems if none exist for the guide's topics
+        try:
+            topics = Topic.query.filter_by(study_guide_id=guide_id).all()
+            # If the guide has no topics yet, create a default topic to enable practice
+            if not topics:
+                default_topic = Topic(
+                    study_guide_id=guide_id,
+                    name=guide.title or "General",
+                    description="Auto-created topic from study guide",
+                    order_index=0
+                )
+                db.session.add(default_topic)
+                db.session.commit()
+                topics = [default_topic]
+
+            total_existing = sum(t.problems.count() for t in topics)
+            if total_existing == 0 and topics:
+                # Try LLM generation first
+                try:
+                    llm_provider = get_default_provider()
+                    for topic in topics:
+                        generated = llm_provider.generate_problems(
+                            topic=topic.name,
+                            num_problems=5,
+                            difficulty="intermediate"
+                        )
+                        for gp in generated:
+                            problem_type_str = gp.get("type", "multiple_choice")
+                            from app.models import Problem, ProblemType
+                            try:
+                                problem_type = ProblemType(problem_type_str)
+                            except Exception:
+                                problem_type = ProblemType.MULTIPLE_CHOICE
+
+                            options = gp.get("options") if problem_type == ProblemType.MULTIPLE_CHOICE else None
+                            hints = gp.get("hints") or []
+
+                            p = Problem(
+                                topic_id=topic.id,
+                                question_text=gp.get("question") or gp.get("prompt") or "",
+                                problem_type=problem_type,
+                                options=options,
+                                correct_answer=gp.get("correct_answer") or "",
+                                explanation=gp.get("explanation") or None,
+                                hints=hints,
+                            )
+                            if p.question_text and p.correct_answer:
+                                db.session.add(p)
+                    db.session.commit()
+                except Exception as llm_err:
+                    current_app.logger.warning(f"LLM generation unavailable, using fallback: {llm_err}")
+                    # Fallback: generate simple problems from raw_text
+                    from app.models import Problem, ProblemType
+                    sg: StudyGuide = StudyGuide.query.get(guide_id)
+                    raw_text = None
+                    if sg and sg.parsed_content and isinstance(sg.parsed_content, dict):
+                        raw_text = sg.parsed_content.get("raw_text")
+
+                    # Basic heuristic: create 5 recall questions per topic using sentences
+                    base_sentences = []
+                    if raw_text:
+                        # Split by lines and filter reasonable length
+                        lines = [l.strip() for l in raw_text.splitlines()]
+                        base_sentences = [l for l in lines if 30 <= len(l) <= 200][:50]
+
+                    for topic in topics:
+                        created = 0
+                        idx = 0
+                        while created < 5 and idx < len(base_sentences):
+                            sentence = base_sentences[idx]
+                            idx += 1
+                            if not sentence:
+                                continue
+                            question = f"Recall: {sentence}"
+                            # Simple multiple-choice with one correct answer and 3 distractors
+                            correct = "True"
+                            options = ["True", "False", "Not sure", "Skip"]
+                            hints = [
+                                "Focus on the key phrase in the statement.",
+                                "Consider if the statement matches what you studied.",
+                                "Break the sentence into parts and verify each part."
+                            ]
+                            p = Problem(
+                                topic_id=topic.id,
+                                question_text=question,
+                                problem_type=ProblemType.MULTIPLE_CHOICE,
+                                options=options,
+                                correct_answer=correct,
+                                explanation="This is a simple recall check from the uploaded guide.",
+                                hints=hints,
+                            )
+                            db.session.add(p)
+                            created += 1
+                        # If no text, create generic math/stat placeholder questions
+                        if created == 0:
+                            placeholders = [
+                                ("What is the definition of the main concept?", "It depends on the topic."),
+                                ("Choose the correct formula application.", "True"),
+                                ("Identify the correct method to solve the problem.", "True"),
+                                ("Select the correct property used here.", "True"),
+                                ("Is the following statement correct?", "True"),
+                            ]
+                            for q, ans in placeholders:
+                                hints = [
+                                    "Recall the concept from your notes.",
+                                    "Think of a worked example.",
+                                    "Match the method to the problem type."
+                                ]
+                                p = Problem(
+                                    topic_id=topic.id,
+                                    question_text=q,
+                                    problem_type=ProblemType.MULTIPLE_CHOICE,
+                                    options=["True", "False", "Unsure", "Skip"],
+                                    correct_answer=ans,
+                                    explanation="Generic practice placeholder.",
+                                    hints=hints,
+                                )
+                                db.session.add(p)
+                    db.session.commit()
+        except Exception as gen_err:
+            current_app.logger.warning(f"Problem generation skipped: {gen_err}")
         
         return jsonify({
             'message': 'Practice session started',
