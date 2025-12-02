@@ -33,8 +33,8 @@
 		loading = true;
 		loadError = '';
 		try {
-			const data = await api.get('/api/study-guides');
-			guides = data.study_guides || data || [];
+			const data = await api.get('/api/guides');
+			guides = data.guides || [];
 		} catch (err) {
 			loadError = (/** @type {Error} */ (err)).message || 'Failed to load study guides';
 		} finally {
@@ -52,7 +52,7 @@
 		try {
 			// Call your API endpoint for file upload
 			const response = await fetch(
-				`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}/api/study-guides/upload`,
+				`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001'}/api/guides/upload`,
 				{
 					method: 'POST',
 					headers: {
@@ -83,9 +83,10 @@
 		try {
 			// Create a new practice session
 			const response = await api.post('/api/practice/start', {
-				study_guide_id: guideId
+				guide_id: guideId
 			});
-			goto(`/practice/${response.session_id}`);
+			const sessionData = response.session || response;
+			goto(`/practice/${sessionData.id}`);
 		} catch (err) {
 			alert((/** @type {Error} */ (err)).message || 'Failed to start practice session');
 		}
@@ -101,8 +102,8 @@
 
 		try {
 			// Load guide details with topics and sessions
-			const guideData = await api.get(`/api/study-guides/${guideId}`);
-			selectedGuide = guideData;
+			const guideData = await api.get(`/api/guides/${guideId}`);
+			selectedGuide = guideData.guide || guideData;
 		} catch (err) {
 			alert((/** @type {Error} */ (err)).message || 'Failed to load guide details');
 			selectedGuideId = null;
@@ -117,7 +118,7 @@
 	async function handleDelete(event) {
 		const { guideId } = event.detail;
 		try {
-			await api.delete(`/api/study-guides/${guideId}`);
+			await api.delete(`/api/guides/${guideId}`);
 			await loadGuides();
 		} catch (err) {
 			alert((/** @type {Error} */ (err)).message || 'Failed to delete guide');
@@ -131,10 +132,11 @@
 		const { guideId, topicIds } = event.detail;
 		try {
 			const response = await api.post('/api/practice/start', {
-				study_guide_id: guideId,
+				guide_id: guideId,
 				topic_ids: topicIds.length > 0 ? topicIds : undefined
 			});
-			goto(`/practice/${response.session_id}`);
+			const sessionData = response.session || response;
+			goto(`/practice/${sessionData.id}`);
 		} catch (err) {
 			alert((/** @type {Error} */ (err)).message || 'Failed to start practice session');
 		}

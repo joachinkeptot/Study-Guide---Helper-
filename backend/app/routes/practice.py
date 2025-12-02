@@ -145,7 +145,7 @@ def get_next_problem(current_user):
         selected_problem = random.choice(weighted_problems)
         
         return jsonify({
-            'problem': selected_problem.to_dict(include_answer=False),
+            'problem': selected_problem.to_dict(include_answer=False, include_hints=True),
             'session_id': session_id
         }), 200
         

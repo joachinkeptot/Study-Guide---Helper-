@@ -21,7 +21,8 @@
 		if (!$auth.isAuthenticated) return;
 
 		try {
-			guide = await api.get(`/api/study-guides/${guideId}`);
+			const response = await api.get(`/api/guides/${guideId}`);
+			guide = response.guide || response;
 		} catch (err) {
 			error = err.message || 'Failed to load study guide';
 		} finally {
@@ -33,9 +34,10 @@
 		startingPractice = true;
 		try {
 			const response = await api.post('/api/practice/start', {
-				study_guide_id: guideId
+				guide_id: parseInt(guideId)
 			});
-			goto(`/practice/${response.session_id}`);
+			const sessionData = response.session || response;
+			goto(`/practice/${sessionData.id}`);
 		} catch (err) {
 			error = err.message || 'Failed to start practice session';
 		} finally {

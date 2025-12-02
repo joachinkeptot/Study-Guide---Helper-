@@ -16,10 +16,10 @@
 			const response = await authAPI.login(email, password);
 			
 			// Store token and user info
-			auth.login(response.access_token, {
-				id: response.user_id,
-				username: response.username,
-				email: email
+			auth.login(response.token, {
+				id: response.user.id,
+				username: email.split('@')[0],
+				email: response.user.email
 			});
 
 			// Redirect to dashboard

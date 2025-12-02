@@ -20,9 +20,11 @@
 		if (!$auth.isAuthenticated) return;
 
 		try {
-			const data = await api.get('/api/progress');
-			progress = data.overall_stats || {};
-			sessions = data.recent_sessions || [];
+			const overviewData = await api.get('/api/progress/overview');
+			progress = overviewData.overview || {};
+			
+			const historyData = await api.get('/api/progress/history');
+			sessions = historyData.history || [];
 		} catch (err) {
 			error = (/** @type {Error} */ (err)).message || 'Failed to load progress data';
 		} finally {
@@ -79,7 +81,7 @@
 						<div>
 							<p class="text-sm font-medium text-gray-600">Total Sessions</p>
 							<p class="text-3xl font-bold text-gray-900 mt-2">
-								{progress.total_sessions || 0}
+								{progress.total_practice_sessions || 0}
 							</p>
 						</div>
 						<div class="text-4xl">📝</div>
@@ -91,7 +93,7 @@
 						<div>
 							<p class="text-sm font-medium text-gray-600">Questions Answered</p>
 							<p class="text-3xl font-bold text-gray-900 mt-2">
-								{progress.total_answers || 0}
+								{progress.total_problems_attempted || 0}
 							</p>
 						</div>
 						<div class="text-4xl">✍️</div>
@@ -103,7 +105,7 @@
 						<div>
 							<p class="text-sm font-medium text-gray-600">Overall Accuracy</p>
 							<p class="text-3xl font-bold text-gray-900 mt-2">
-								{calculateAccuracy(progress.correct_answers, progress.total_answers)}%
+								{progress.overall_accuracy || 0}%
 							</p>
 						</div>
 						<div class="text-4xl">🎯</div>
@@ -135,20 +137,20 @@
 								<div class="flex items-center justify-between">
 									<div class="flex-1">
 										<h3 class="text-base font-medium text-gray-900 mb-1">
-											{session.study_guide?.title || 'Practice Session'}
+											{session.guide?.title || 'Practice Session'}
 										</h3>
 										<p class="text-sm text-gray-600">
 											{formatDate(session.started_at)}
 										</p>
 									</div>
 									<div class="flex items-center space-x-4 text-sm">
-										{#if session.completed_at}
+										{#if session.ended_at}
 											<div class="text-right">
 												<p class="font-medium text-gray-900">
-													{session.correct_count || 0} / {session.total_count || 0}
+													{session.stats?.correct_answers || 0} / {session.stats?.total_problems || 0}
 												</p>
 												<p class="text-gray-600">
-													{calculateAccuracy(session.correct_count, session.total_count)}% correct
+													{session.stats?.accuracy || 0}% correct
 												</p>
 											</div>
 											<span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">

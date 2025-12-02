@@ -3,7 +3,6 @@
 	import { auth } from '$stores/auth';
 	import { authAPI } from '$lib/api';
 
-	let username = '';
 	let email = '';
 	let password = '';
 	let confirmPassword = '';
@@ -27,19 +26,19 @@
 		loading = true;
 
 		try {
-			const response = await authAPI.register(username, email, password);
+			const response = await authAPI.register(email, password);
 			
 			// Store token and user info
-			auth.login(response.access_token, {
-				id: response.user_id,
-				username: response.username,
-				email: email
+			auth.login(response.token, {
+				id: response.user.id,
+				username: email.split('@')[0],
+				email: response.user.email
 			});
 
 			// Redirect to dashboard
 			goto('/dashboard');
 		} catch (err) {
-			error = err.message || 'Registration failed. Please try again.';
+			error = err instanceof Error ? err.message : 'Registration failed. Please try again.';
 		} finally {
 			loading = false;
 		}
@@ -71,22 +70,6 @@
 			{/if}
 
 			<div class="space-y-4">
-				<div>
-					<label for="username" class="block text-sm font-medium text-gray-700">
-						Username
-					</label>
-					<input
-						id="username"
-						name="username"
-						type="text"
-						required
-						bind:value={username}
-						class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm 
-							focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-						placeholder="johndoe"
-					/>
-				</div>
-
 				<div>
 					<label for="email" class="block text-sm font-medium text-gray-700">
 						Email address

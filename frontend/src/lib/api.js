@@ -5,7 +5,7 @@ import { auth } from "$stores/auth";
 import { get } from "svelte/store";
 
 // Get base URL from environment variable or default to localhost
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
 
 /**
  * Custom fetch wrapper that automatically handles JWT authentication
@@ -55,7 +55,9 @@ async function apiFetch(endpoint, options = {}) {
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(
-        errorData.message || `HTTP error! status: ${response.status}`
+        errorData.error ||
+          errorData.message ||
+          `HTTP error! status: ${response.status}`
       );
     }
 
@@ -142,7 +144,7 @@ export const authAPI = {
    * @param {string} password
    */
   login: async (email, password) => {
-    const response = await apiFetch("/auth/login", {
+    const response = await apiFetch("/api/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
     });
@@ -150,21 +152,20 @@ export const authAPI = {
   },
 
   /**
-   * @param {string} username
    * @param {string} email
    * @param {string} password
    */
-  register: async (username, email, password) => {
-    const response = await apiFetch("/auth/register", {
+  register: async (email, password) => {
+    const response = await apiFetch("/api/auth/register", {
       method: "POST",
-      body: JSON.stringify({ username, email, password }),
+      body: JSON.stringify({ email, password }),
     });
     return response;
   },
 
   logout: async () => {
     try {
-      await apiFetch("/auth/logout", { method: "POST" });
+      await apiFetch("/api/auth/logout", { method: "POST" });
     } catch (error) {
       // Even if logout fails, clear local state
       console.error("Logout error:", error);
