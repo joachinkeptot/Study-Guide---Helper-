@@ -8,7 +8,7 @@ This service implements intelligent problem selection based on:
 - User performance and self-reported confidence
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from typing import Optional, List, Tuple
 from sqlalchemy import func, and_, or_
 from app import db
@@ -90,7 +90,7 @@ def get_next_problem(
         return None
     
     # Get topic
-    topic = Topic.query.get(selected_topic_id)
+    topic = db.session.get(Topic, selected_topic_id)
     if not topic:
         return None
     
@@ -112,13 +112,18 @@ def get_next_problem(
             Problem.topic_id == selected_topic_id,
             ~Problem.id.in_(exclude_problem_ids) if exclude_problem_ids else True
         ).first()
+
+    if not problem:
+        # Cross-topic fallback: try any problem from the provided topics
+        problem = Problem.query.filter(
+            Problem.topic_id.in_(topic_ids),
+            ~Problem.id.in_(exclude_problem_ids) if exclude_problem_ids else True
+        ).order_by(func.random()).first()
     
     if problem:
         return (problem, topic)
     
     return None
-
-
 def _select_topic_by_confidence(user_id: int, topic_ids: List[int]) -> Optional[int]:
     """
     Select a topic weighted by inverse confidence (lower confidence = higher priority).
@@ -154,12 +159,13 @@ def _select_topic_by_confidence(user_id: int, topic_ids: List[int]) -> Optional[
             
             # Boost weight for topics not practiced recently
             if progress.last_practiced:
-                days_since = (datetime.utcnow() - progress.last_practiced).days
+                base_time = progress.last_practiced if progress.last_practiced.tzinfo else progress.last_practiced.replace(tzinfo=UTC)
+                days_since = (datetime.now(UTC) - base_time).days
                 time_boost = min(days_since / SpacedRepetitionConfig.TIME_DECAY_DAYS, 1.0)
                 weight *= (1.0 + time_boost)
         else:
-            # No progress yet - high priority for new topics
-            weight = 2.0
+            # No progress yet - moderate priority for new topics
+            weight = 1.0
         
         weights.append(weight)
         valid_topics.append(topic_id)
@@ -167,10 +173,18 @@ def _select_topic_by_confidence(user_id: int, topic_ids: List[int]) -> Optional[
     if not valid_topics:
         return None
     
-    # Weighted random selection
-    total_weight = sum(weights)
-    normalized_weights = [w / total_weight for w in weights]
-    
+    # Amplify inverse-confidence differences slightly to favor low-confidence topics
+    amplified_weights = []
+    for w, tid in zip(weights, valid_topics):
+        progress = progress_map.get(tid)
+        if progress:
+            # multiply to emphasize user-specific confidence
+            amplified_weights.append(max(0.1, w * 5.0))
+        else:
+            amplified_weights.append(w)
+
+    total_weight = sum(amplified_weights)
+    normalized_weights = [w / total_weight for w in amplified_weights]
     selected_topic = random.choices(valid_topics, weights=normalized_weights, k=1)[0]
     return selected_topic
 
@@ -262,14 +276,14 @@ def _get_review_problem(
         return None
     
     # Filter out problems attempted too recently
-    min_time = datetime.utcnow() - timedelta(
+    min_time = datetime.now(UTC) - timedelta(
         minutes=SpacedRepetitionConfig.MIN_REPEAT_INTERVAL
     )
-    eligible_problems = [
-        (p, last_attempt, attempt_count, correct_count)
-        for p, last_attempt, attempt_count, correct_count in problems_with_stats
-        if last_attempt < min_time
-    ]
+    eligible_problems = []
+    for p, last_attempt, attempt_count, correct_count in problems_with_stats:
+        base_last = last_attempt if last_attempt.tzinfo else last_attempt.replace(tzinfo=UTC)
+        if base_last < min_time:
+            eligible_problems.append((p, last_attempt, attempt_count, correct_count))
     
     if not eligible_problems:
         return None
@@ -282,7 +296,8 @@ def _get_review_problem(
         score = incorrect_count * 2.0
         
         # Time factor: older attempts get higher priority
-        days_since = (datetime.utcnow() - last_attempt).days
+        base_last = last_attempt if last_attempt.tzinfo else last_attempt.replace(tzinfo=UTC)
+        days_since = (datetime.now(UTC) - base_last).days
         time_factor = min(days_since / SpacedRepetitionConfig.TIME_DECAY_DAYS, 1.0)
         score *= (1.0 + time_factor)
         
@@ -381,7 +396,7 @@ def update_confidence(
         progress.mastered = False
     
     # Update last practiced time
-    progress.last_practiced = datetime.utcnow()
+    progress.last_practiced = datetime.now(UTC)
     
     db.session.commit()
     
@@ -415,7 +430,8 @@ def get_topic_weights(user_id: int, topic_ids: List[int]) -> dict:
             weight = (1.0 - confidence) + 0.1
             
             if progress.last_practiced:
-                days_since = (datetime.utcnow() - progress.last_practiced).days
+                base_time = progress.last_practiced if progress.last_practiced.tzinfo else progress.last_practiced.replace(tzinfo=UTC)
+                days_since = (datetime.now(UTC) - base_time).days
                 time_boost = min(days_since / SpacedRepetitionConfig.TIME_DECAY_DAYS, 1.0)
                 weight *= (1.0 + time_boost)
         else:

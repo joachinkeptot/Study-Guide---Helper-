@@ -3,7 +3,7 @@ Tests for problem selector service with spaced repetition logic.
 """
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from app import create_app, db
 from app.models import (
     User, StudyGuide, Topic, Problem, ProblemType,
@@ -200,7 +200,7 @@ class TestGetNextProblem:
                 current_confidence=0.9,  # High confidence
                 problems_attempted=10,
                 problems_correct=9,
-                last_practiced=datetime.utcnow()
+                last_practiced=datetime.now(UTC)
             )
             TopicProgress(
                 user_id=user_id,
@@ -208,7 +208,7 @@ class TestGetNextProblem:
                 current_confidence=0.2,  # Low confidence
                 problems_attempted=10,
                 problems_correct=2,
-                last_practiced=datetime.utcnow()
+                last_practiced=datetime.now(UTC)
             )
             db.session.commit()
             
@@ -395,7 +395,7 @@ class TestUpdateConfidence:
             user_id = sample_data['user'].id
             topic_id = sample_data['topics'][0].id
             
-            old_time = datetime.utcnow() - timedelta(days=5)
+            old_time = datetime.now(UTC) - timedelta(days=5)
             
             progress = TopicProgress(
                 user_id=user_id,
@@ -412,7 +412,7 @@ class TestUpdateConfidence:
             progress = update_confidence(user_id, topic_id, was_correct=True)
             
             assert progress.last_practiced > old_time
-            assert (datetime.utcnow() - progress.last_practiced).seconds < 5
+            assert (datetime.now(UTC) - progress.last_practiced).seconds < 5
 
 
 class TestGetNewProblem:
@@ -482,7 +482,7 @@ class TestGetReviewProblem:
             
             # Create attempts - some correct, some incorrect
             session = sample_data['session']
-            old_time = datetime.utcnow() - timedelta(hours=2)
+            old_time = datetime.now(UTC) - timedelta(hours=2)
             
             # Problem 1: answered incorrectly multiple times
             for _ in range(3):
@@ -530,7 +530,7 @@ class TestGetReviewProblem:
                 problem_id=topic_problems[0].id,
                 user_answer='A',
                 is_correct=False,
-                attempted_at=datetime.utcnow()
+                attempted_at=datetime.now(UTC)
             )
             db.session.add(recent_attempt)
             
@@ -540,7 +540,7 @@ class TestGetReviewProblem:
                 problem_id=topic_problems[1].id,
                 user_answer='A',
                 is_correct=False,
-                attempted_at=datetime.utcnow() - timedelta(hours=2)
+                attempted_at=datetime.now(UTC) - timedelta(hours=2)
             )
             db.session.add(old_attempt)
             db.session.commit()
@@ -580,7 +580,7 @@ class TestGetTopicWeights:
                 current_confidence=0.2,
                 problems_attempted=10,
                 problems_correct=2,
-                last_practiced=datetime.utcnow()
+                last_practiced=datetime.now(UTC)
             )
             high_conf_progress = TopicProgress(
                 user_id=user_id,
@@ -588,7 +588,7 @@ class TestGetTopicWeights:
                 current_confidence=0.8,
                 problems_attempted=10,
                 problems_correct=8,
-                last_practiced=datetime.utcnow()
+                last_practiced=datetime.now(UTC)
             )
             db.session.add_all([low_conf_progress, high_conf_progress])
             db.session.commit()
@@ -611,7 +611,7 @@ class TestGetTopicWeights:
                 current_confidence=0.5,
                 problems_attempted=10,
                 problems_correct=5,
-                last_practiced=datetime.utcnow()
+                last_practiced=datetime.now(UTC)
             )
             old_progress = TopicProgress(
                 user_id=user_id,
@@ -619,7 +619,7 @@ class TestGetTopicWeights:
                 current_confidence=0.5,
                 problems_attempted=10,
                 problems_correct=5,
-                last_practiced=datetime.utcnow() - timedelta(days=10)
+                last_practiced=datetime.now(UTC) - timedelta(days=10)
             )
             db.session.add_all([recent_progress, old_progress])
             db.session.commit()

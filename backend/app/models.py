@@ -1,5 +1,5 @@
 from app import db
-from datetime import datetime
+from datetime import datetime, UTC
 import enum
 
 
@@ -17,7 +17,7 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(256), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), nullable=False)
     
     # Relationships
     study_guides = db.relationship('StudyGuide', backref='user', lazy='dynamic', cascade='all, delete-orphan')
@@ -41,7 +41,7 @@ class StudyGuide(db.Model):
     title = db.Column(db.String(255), nullable=False)
     original_filename = db.Column(db.String(255), nullable=True)
     parsed_content = db.Column(db.JSON, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), nullable=False)
     
     # Relationships
     topics = db.relationship('Topic', backref='study_guide', lazy='dynamic', cascade='all, delete-orphan', order_by='Topic.order_index')
@@ -137,7 +137,7 @@ class PracticeSession(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
     study_guide_id = db.Column(db.Integer, db.ForeignKey('study_guides.id', ondelete='CASCADE'), nullable=False, index=True)
-    started_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    started_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), nullable=False)
     ended_at = db.Column(db.DateTime, nullable=True)
     
     # Relationships
@@ -173,7 +173,7 @@ class ProblemAttempt(db.Model):
     is_correct = db.Column(db.Boolean, nullable=False)
     confidence_rating = db.Column(db.Integer, nullable=True)  # 1-3 scale
     feedback = db.Column(db.Text, nullable=True)
-    attempted_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    attempted_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC), nullable=False)
     hints_used = db.Column(db.JSON, nullable=True)  # Array of hint indices that were revealed
     
     # Indexes

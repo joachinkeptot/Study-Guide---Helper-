@@ -8,6 +8,9 @@ class Config:
     """Base configuration"""
     SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    # Prevent SQLAlchemy from expiring (detaching) objects on commit,
+    # which breaks tests accessing `.id` after fixture commits.
+    SQLALCHEMY_SESSION_OPTIONS = {"expire_on_commit": False}
     
     # Database URI - handles both postgres:// and postgresql:// schemes
     DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///app.db')

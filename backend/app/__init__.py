@@ -4,7 +4,7 @@ from flask_migrate import Migrate
 from flask_cors import CORS
 from app.config import config
 
-db = SQLAlchemy()
+db = SQLAlchemy(session_options={"expire_on_commit": False})
 migrate = Migrate()
 
 
