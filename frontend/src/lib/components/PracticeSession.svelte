@@ -26,6 +26,9 @@
 	let currentFeedback = null;
 
 	let isSubmitting = false;
+	/** @type {string[]} */
+	let revealedHints = [];
+	let isLoadingHint = false;
 
 	onMount(() => {
 		// Start timer
@@ -54,7 +57,7 @@
 	 */
 	function handleSubmit(event) {
 		isSubmitting = true;
-		dispatch('submitAnswer', event.detail);
+		dispatch('submitAnswer', { ...event.detail, hintsUsed: revealedHints.length });
 	}
 
 	/**
@@ -63,6 +66,14 @@
 	function handleNext(event) {
 		dispatch('nextProblem', event.detail);
 		state = 'question';
+		revealedHints = []; // Reset hints for next problem
+	}
+
+	/**
+	 * @param {CustomEvent<{ problemId: number }>} event
+	 */
+	function handleHintRequest(event) {
+		dispatch('requestHint', event.detail);
 	}
 
 	function handleEndSession() {
@@ -79,6 +90,9 @@
 		currentFeedback = null;
 		state = 'question';
 		isSubmitting = false;
+		if (!currentProblem || currentProblem.id !== problem.id) {
+			revealedHints = []; // Reset hints when showing new problem
+		}
 	}
 
 	/**
@@ -90,10 +104,25 @@
 		isSubmitting = false;
 	}
 
+	/**
+	 * @param {string} hint
+	 */
+	export function addHint(hint) {
+		revealedHints = [...revealedHints, hint];
+		isLoadingHint = false;
+	}
+
+	/**
+	 * @param {boolean} loading
+	 */
+	export function setHintLoading(loading) {
+		isLoadingHint = loading;
+	}
+
 	$: progress = totalProblems > 0 ? (currentProblemIndex / totalProblems) * 100 : 0;
 </script>
 
-<div class="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+<div class="min-h-screen bg-linear-to-br from-gray-50 to-gray-100">
 	<!-- Header Bar -->
 	<div class="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
 		<div class="max-w-4xl mx-auto px-4 py-4">
@@ -153,7 +182,10 @@
 					<ProblemDisplay
 						problem={currentProblem}
 						disabled={isSubmitting}
+						revealedHints={revealedHints}
+						isLoadingHint={isLoadingHint}
 						on:submit={handleSubmit}
+						on:requestHint={handleHintRequest}
 					/>
 				</div>
 			{:else if state === 'feedback' && currentFeedback}

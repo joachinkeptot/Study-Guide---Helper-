@@ -85,22 +85,64 @@
 	}
 
 	/**
-	 * @param {CustomEvent<{ problemId: number; answer: string }>} event
+	 * @param {CustomEvent<{ problemId: number; answer: string; hintsUsed?: number }>} event
 	 */
 	async function handleSubmitAnswer(event) {
-		const { problemId, answer } = event.detail;
+		const { problemId, answer, hintsUsed = 0 } = event.detail;
 
 		try {
+			// Create hints_used array based on count
+			const hints_used = hintsUsed > 0 
+				? Array.from({ length: hintsUsed }, (_, i) => i)
+				: [];
+
 			const feedback = await api.post(`/api/practice/session/${sessionId}/submit`, {
 				problem_id: problemId,
-				answer: answer
+				answer: answer,
+				hints_used: hints_used
 			});
 
+			// Add hints_used count to feedback for display
 			if (practiceSessionComponent) {
-				practiceSessionComponent.showFeedback(feedback);
+				practiceSessionComponent.showFeedback({
+					...feedback,
+					hints_used: hintsUsed
+				});
 			}
 		} catch (err) {
 			error = (/** @type {Error} */ (err)).message || 'Failed to submit answer';
+		}
+	}
+
+	/**
+	 * @param {CustomEvent<{ problemId: number }>} event
+	 */
+	async function handleHintRequest(event) {
+		const { problemId } = event.detail;
+
+		if (!practiceSessionComponent || !sessionId) return;
+
+		try {
+			practiceSessionComponent.setHintLoading(true);
+			
+			const response = await api.post('/api/practice/hint', {
+				session_id: parseInt(sessionId),
+				problem_id: problemId
+			});
+
+			// Add the hint to the practice session component
+			practiceSessionComponent.addHint(response.hint);
+		} catch (err) {
+			const errorMsg = (/** @type {Error} */ (err)).message;
+			// Show user-friendly error messages
+			if (errorMsg.includes('All hints have been used')) {
+				alert('All hints for this problem have been used.');
+			} else if (errorMsg.includes('No hints available')) {
+				alert('No hints are available for this problem.');
+			} else {
+				error = errorMsg || 'Failed to load hint';
+			}
+			practiceSessionComponent.setHintLoading(false);
 		}
 	}
 
@@ -151,7 +193,7 @@
 
 {#if $auth.isAuthenticated}
 	{#if loading}
-		<div class="min-h-screen flex justify-center items-center bg-gradient-to-br from-gray-50 to-gray-100">
+		<div class="min-h-screen flex justify-center items-center bg-linear-to-br from-gray-50 to-gray-100">
 			<div class="text-center">
 				<div class="animate-spin rounded-full h-16 w-16 border-b-4 border-indigo-600 mx-auto mb-4"></div>
 				<p class="text-gray-600">Loading practice session...</p>
@@ -186,6 +228,7 @@
 			on:submitAnswer={handleSubmitAnswer}
 			on:nextProblem={handleNextProblem}
 			on:endSession={handleEndSession}
+			on:requestHint={handleHintRequest}
 		/>
 	{/if}
 {/if}

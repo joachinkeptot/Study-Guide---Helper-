@@ -29,7 +29,7 @@
 	$: displayedAreas = weakAreas.slice(0, displayLimit);
 </script>
 
-<div class="bg-gradient-to-br from-red-50 to-orange-50 rounded-xl p-6 shadow-sm border border-red-100">
+<div class="bg-linear-to-br from-red-50 to-orange-50 rounded-xl p-6 shadow-sm border border-red-100">
 	<div class="flex items-center justify-between mb-6">
 		<div>
 			<h3 class="text-lg font-semibold text-gray-900">Focus Areas</h3>
@@ -60,7 +60,7 @@
 										></div>
 									</div>
 								</div>
-								<span class="text-sm font-medium text-gray-900 min-w-[3rem] text-right">
+								<span class="text-sm font-medium text-gray-900 min-w-12 text-right">
 									{area.confidence.toFixed(0)}%
 								</span>
 							</div>
@@ -79,7 +79,7 @@
 							on:click={() => handlePractice(area.guide_id, area.topic)}
 							class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg
 								hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 
-								focus:ring-offset-2 transition-all shadow-sm hover:shadow flex-shrink-0"
+								focus:ring-offset-2 transition-all shadow-sm hover:shadow shrink-0"
 						>
 							Practice
 						</button>

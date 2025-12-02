@@ -467,6 +467,80 @@ Update confidence rating for a problem attempt.
 
 ---
 
+### Get Hint for Problem
+
+**POST** `/practice/hint`
+
+Request the next hint for a problem during practice. Returns hints progressively (one at a time).
+
+**Request Body:**
+
+```json
+{
+  "session_id": 123,
+  "problem_id": 456
+}
+```
+
+**Response (200):**
+
+```json
+{
+  "hint": "Think about the relationship between variables...",
+  "hint_index": 0,
+  "hints_used_count": 1,
+  "total_hints": 3,
+  "penalty_applied": 0.1
+}
+```
+
+**Response Fields:**
+
+- `hint`: Text of the next hint
+- `hint_index`: Zero-based index of this hint (0 = first hint)
+- `hints_used_count`: Total number of hints used so far
+- `total_hints`: Total hints available for this problem
+- `penalty_applied`: Confidence penalty per hint (usually 0.1 = 10%)
+
+**Errors:**
+
+- `400`: Missing required fields OR all hints already used
+- `404`: Session not found OR problem not found OR no hints available for this problem
+
+**Notes:**
+
+- Hints are revealed progressively (must request hint 1 before hint 2, etc.)
+- Each hint reduces confidence boost when answer is correct
+- Hint usage is tracked in ProblemAttempt when answer is submitted
+- If no ProblemAttempt exists yet, first hint can still be requested
+
+**Example Usage:**
+
+```javascript
+// Request first hint
+const hint1 = await api.post("/api/practice/hint", {
+  session_id: 123,
+  problem_id: 456,
+});
+// Returns: hint_index: 0, hints_used_count: 1
+
+// Request second hint
+const hint2 = await api.post("/api/practice/hint", {
+  session_id: 123,
+  problem_id: 456,
+});
+// Returns: hint_index: 1, hints_used_count: 2
+
+// Try to request beyond available hints
+const hint4 = await api.post("/api/practice/hint", {
+  session_id: 123,
+  problem_id: 456,
+});
+// Error 400: "All hints have been used"
+```
+
+---
+
 ## Progress Routes (`/api/progress`)
 
 ### Get Progress Overview

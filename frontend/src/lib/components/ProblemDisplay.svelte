@@ -3,9 +3,12 @@
 
 	const dispatch = createEventDispatcher();
 
-	/** @type {{ id: number; question_text: string; problem_type: string; options?: any; }} */
+	/** @type {{ id: number; question_text: string; problem_type: string; options?: any; hint_count?: number; }} */
 	export let problem;
 	export let disabled = false;
+	/** @type {string[]} */
+	export let revealedHints = [];
+	export let isLoadingHint = false;
 
 	let answer = '';
 	/** @type {string | null} */
@@ -27,6 +30,10 @@
 			problemId: problem.id,
 			answer: answer
 		});
+	}
+
+	function handleHintRequest() {
+		dispatch('requestHint', { problemId: problem.id });
 	}
 
 	/**
@@ -72,7 +79,7 @@
 	<!-- Question -->
 	<div class="mb-6">
 		<div class="flex items-start gap-3 mb-4">
-			<div class="text-2xl flex-shrink-0">❓</div>
+			<div class="text-2xl shrink-0">❓</div>
 			<div class="flex-1">
 				<p class="text-lg text-gray-900 leading-relaxed">{problem.question_text}</p>
 			</div>
@@ -95,7 +102,7 @@
 							focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
 					>
 						<div class="flex items-center gap-3">
-							<div class="flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center
+							<div class="shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center
 								{selectedOption === option
 									? 'border-indigo-500 bg-indigo-500'
 									: 'border-gray-300'}">
@@ -142,6 +149,54 @@
 			</div>
 		{/if}
 	</div>
+
+	<!-- Hints Section -->
+	{#if problem.hint_count && problem.hint_count > 0}
+		<div class="mb-6">
+			<div class="bg-amber-50 border border-amber-200 rounded-lg p-4">
+				<div class="flex items-start gap-3 mb-3">
+					<span class="text-xl">💡</span>
+					<div class="flex-1">
+						<h4 class="text-sm font-medium text-amber-900 mb-1">Need a hint?</h4>
+						<p class="text-xs text-amber-700">
+							{revealedHints.length} of {problem.hint_count} hints used
+							{#if revealedHints.length > 0}
+								(reduces confidence score)
+							{/if}
+						</p>
+					</div>
+				</div>
+
+				<!-- Revealed Hints -->
+				{#if revealedHints.length > 0}
+					<div class="space-y-2 mb-3">
+						{#each revealedHints as hint, index}
+							<div class="bg-white rounded p-3 border border-amber-200">
+								<p class="text-xs font-medium text-amber-700 mb-1">Hint {index + 1}:</p>
+								<p class="text-sm text-gray-700">{hint}</p>
+							</div>
+						{/each}
+					</div>
+				{/if}
+
+				<!-- Hint Button -->
+				{#if revealedHints.length < problem.hint_count}
+					<button
+						on:click={handleHintRequest}
+						disabled={disabled || isLoadingHint}
+						class="w-full px-4 py-2 bg-amber-100 text-amber-900 font-medium rounded-lg
+							hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-500 
+							focus:ring-offset-2 transition-all border border-amber-300
+							disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-amber-100"
+					>
+						{isLoadingHint ? 'Loading...' : `Show Hint ${revealedHints.length + 1}`}
+					</button>
+				{:else}
+					<p class="text-xs text-amber-700 text-center italic">All hints used</p>
+				{/if}
+			</div>
+		</div>
+	{/if}
 
 	<!-- Submit Button -->
 	<button

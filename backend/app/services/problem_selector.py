@@ -310,7 +310,8 @@ def update_confidence(
     user_id: int,
     topic_id: int,
     was_correct: bool,
-    user_confidence: Optional[int] = None
+    user_confidence: Optional[int] = None,
+    hints_used_count: int = 0
 ) -> TopicProgress:
     """
     Update topic confidence using exponential moving average.
@@ -320,6 +321,7 @@ def update_confidence(
         topic_id: ID of the topic
         was_correct: Whether the answer was correct
         user_confidence: User's self-reported confidence (1-3)
+        hints_used_count: Number of hints used for this problem
     
     Returns:
         Updated TopicProgress object
@@ -356,6 +358,13 @@ def update_confidence(
     if user_confidence and user_confidence in SpacedRepetitionConfig.USER_CONFIDENCE_WEIGHTS:
         weight = SpacedRepetitionConfig.USER_CONFIDENCE_WEIGHTS[user_confidence]
         confidence_change *= weight
+    
+    # Reduce confidence boost based on hints used
+    if hints_used_count > 0 and was_correct:
+        # Each hint reduces confidence boost by 25%
+        hint_penalty = 1.0 - (hints_used_count * 0.25)
+        hint_penalty = max(0.25, hint_penalty)  # Minimum 25% of boost retained
+        confidence_change *= hint_penalty
     
     # Apply exponential moving average
     alpha = SpacedRepetitionConfig.EMA_ALPHA

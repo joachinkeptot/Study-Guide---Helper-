@@ -101,13 +101,17 @@ def create_problem_attempt():
     if confidence is not None and (confidence < 1 or confidence > 3):
         return jsonify({'error': 'Confidence rating must be between 1 and 3'}), 400
     
+    # Get hints used if provided
+    hints_used = data.get('hints_used', [])
+    
     attempt = ProblemAttempt(
         session_id=data['session_id'],
         problem_id=data['problem_id'],
         user_answer=data['user_answer'],
         is_correct=data['is_correct'],
         confidence_rating=confidence,
-        feedback=data.get('feedback')
+        feedback=data.get('feedback'),
+        hints_used=hints_used
     )
     db.session.add(attempt)
     
@@ -136,6 +140,14 @@ def create_problem_attempt():
     # Update confidence (simple weighted average)
     if confidence:
         confidence_score = confidence / 3.0  # Normalize to 0-1
+        
+        # Apply hint penalty if hints were used
+        if hints_used and len(hints_used) > 0:
+            # Reduce confidence boost based on number of hints used
+            hint_penalty_multiplier = 1.0 - (len(hints_used) * problem.hint_penalty)
+            hint_penalty_multiplier = max(0.3, hint_penalty_multiplier)  # Min 30% of confidence boost
+            confidence_score *= hint_penalty_multiplier
+        
         if progress.current_confidence == 0:
             progress.current_confidence = confidence_score
         else:
@@ -169,3 +181,75 @@ def get_topic_progress():
     else:
         progress_list = query.all()
         return jsonify([p.to_dict() for p in progress_list]), 200
+
+
+@api_bp.route('/practice/hint', methods=['POST'])
+def get_hint():
+    """Get the next hint for a problem during practice"""
+    data = request.get_json()
+    
+    if not data or not data.get('session_id') or not data.get('problem_id'):
+        return jsonify({'error': 'session_id and problem_id are required'}), 400
+    
+    session_id = data['session_id']
+    problem_id = data['problem_id']
+    
+    # Verify session exists
+    session = PracticeSession.query.get(session_id)
+    if not session:
+        return jsonify({'error': 'Practice session not found'}), 404
+    
+    # Get the problem
+    problem = Problem.query.get(problem_id)
+    if not problem:
+        return jsonify({'error': 'Problem not found'}), 404
+    
+    # Check if problem has hints
+    if not problem.hints or len(problem.hints) == 0:
+        return jsonify({'error': 'No hints available for this problem'}), 404
+    
+    # Find existing attempt for this problem in this session (if any)
+    attempt = ProblemAttempt.query.filter_by(
+        session_id=session_id,
+        problem_id=problem_id
+    ).order_by(ProblemAttempt.attempted_at.desc()).first()
+    
+    # If no attempt exists yet, create a placeholder (hints requested before submission)
+    if not attempt:
+        # Return first hint and create record to track it
+        hint_index = 0
+        hint = problem.hints[hint_index]
+        
+        # We'll track hints separately until the problem is actually attempted
+        # For now, just return the hint
+        return jsonify({
+            'hint': hint,
+            'hint_index': hint_index,
+            'hints_used_count': 1,
+            'total_hints': len(problem.hints),
+            'penalty_applied': problem.hint_penalty
+        }), 200
+    
+    # Get hints already used
+    hints_used = attempt.hints_used or []
+    
+    # Check if all hints have been used
+    if len(hints_used) >= len(problem.hints):
+        return jsonify({'error': 'All hints have been used'}), 400
+    
+    # Get the next hint index
+    next_hint_index = len(hints_used)
+    next_hint = problem.hints[next_hint_index]
+    
+    # Update hints_used in the attempt
+    hints_used.append(next_hint_index)
+    attempt.hints_used = hints_used
+    db.session.commit()
+    
+    return jsonify({
+        'hint': next_hint,
+        'hint_index': next_hint_index,
+        'hints_used_count': len(hints_used),
+        'total_hints': len(problem.hints),
+        'penalty_applied': problem.hint_penalty
+    }), 200

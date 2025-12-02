@@ -106,21 +106,27 @@ class Problem(db.Model):
     options = db.Column(db.JSON, nullable=True)  # For multiple choice questions
     correct_answer = db.Column(db.Text, nullable=False)
     explanation = db.Column(db.Text, nullable=True)
+    hints = db.Column(db.JSON, nullable=True)  # Array of progressive hints
+    hint_penalty = db.Column(db.Float, default=0.1, nullable=False)  # Reduces score credit per hint
     
     # Relationships
     attempts = db.relationship('ProblemAttempt', backref='problem', lazy='dynamic', cascade='all, delete-orphan')
     
-    def to_dict(self, include_answer=False):
+    def to_dict(self, include_answer=False, include_hints=False):
         result = {
             'id': self.id,
             'topic_id': self.topic_id,
             'question_text': self.question_text,
             'problem_type': self.problem_type.value,
             'options': self.options,
-            'explanation': self.explanation
+            'explanation': self.explanation,
+            'hint_count': len(self.hints) if self.hints else 0
         }
         if include_answer:
             result['correct_answer'] = self.correct_answer
+        if include_hints:
+            result['hints'] = self.hints
+            result['hint_penalty'] = self.hint_penalty
         return result
 
 
@@ -168,6 +174,7 @@ class ProblemAttempt(db.Model):
     confidence_rating = db.Column(db.Integer, nullable=True)  # 1-3 scale
     feedback = db.Column(db.Text, nullable=True)
     attempted_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    hints_used = db.Column(db.JSON, nullable=True)  # Array of hint indices that were revealed
     
     # Indexes
     __table_args__ = (
@@ -185,7 +192,8 @@ class ProblemAttempt(db.Model):
             'is_correct': self.is_correct,
             'confidence_rating': self.confidence_rating,
             'feedback': self.feedback,
-            'attempted_at': self.attempted_at.isoformat()
+            'attempted_at': self.attempted_at.isoformat(),
+            'hints_used': self.hints_used or []
         }
 
 

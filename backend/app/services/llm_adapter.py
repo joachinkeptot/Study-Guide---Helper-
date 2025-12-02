@@ -57,6 +57,10 @@ Requirements:
 - For multiple choice, provide 4 options with only one correct answer
 - Include detailed explanations for correct answers
 - Problems should be progressively challenging
+- IMPORTANT: Provide 2-3 progressive hints for each problem that guide students without giving away the answer
+  * Hint 1: Gentle nudge (e.g., "Think about the key concept involved...")
+  * Hint 2: More specific guidance (e.g., "Consider applying [formula/method]...")
+  * Hint 3: Strong hint but not the full solution (e.g., "The first step is to...")
 
 Return your response as a valid JSON object with this structure:
 {{
@@ -69,7 +73,7 @@ Return your response as a valid JSON object with this structure:
       "explanation": "Detailed explanation of why this is correct",
       "difficulty": "{difficulty}",
       "topic": "{topic}",
-      "hints": ["hint1", "hint2"]  // Optional hints
+      "hints": ["hint1", "hint2", "hint3"]  // 2-3 progressive hints
     }}
   ]
 }}

@@ -3,7 +3,7 @@
 
 	const dispatch = createEventDispatcher();
 
-	/** @type {{ is_correct: boolean; explanation?: string; correct_answer?: string; user_answer?: string; }} */
+	/** @type {{ is_correct: boolean; explanation?: string; correct_answer?: string; user_answer?: string; hints_used?: number; }} */
 	export let feedback;
 	export let disabled = false;
 
@@ -86,11 +86,26 @@
 		</div>
 	{/if}
 
+	<!-- Hints Used Indicator -->
+	{#if feedback.hints_used && feedback.hints_used > 0}
+		<div class="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+			<div class="flex items-center gap-2">
+				<div class="text-lg shrink-0">💡</div>
+				<div class="flex-1">
+					<p class="text-xs font-medium text-amber-900">
+						{feedback.hints_used} {feedback.hints_used === 1 ? 'hint' : 'hints'} used
+					</p>
+					<p class="text-xs text-amber-700">Confidence score adjusted accordingly</p>
+				</div>
+			</div>
+		</div>
+	{/if}
+
 	<!-- Explanation -->
 	{#if feedback.explanation}
 		<div class="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
 			<div class="flex items-start gap-2">
-				<div class="text-xl flex-shrink-0">💡</div>
+				<div class="text-xl shrink-0">💡</div>
 				<div class="flex-1">
 					<p class="text-sm font-medium text-blue-900 mb-1">Explanation</p>
 					<p class="text-sm text-blue-800 leading-relaxed">{feedback.explanation}</p>
