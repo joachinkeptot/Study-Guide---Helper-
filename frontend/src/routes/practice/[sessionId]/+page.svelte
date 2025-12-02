@@ -4,14 +4,23 @@
 	import { goto } from '$app/navigation';
 	import { auth } from '$stores/auth';
 	import api from '$lib/api';
+	import PracticeSession from '$lib/components/PracticeSession.svelte';
+	import SessionSummary from '$lib/components/SessionSummary.svelte';
 
+	/** @type {any} */
 	let session = null;
+	/** @type {any} */
 	let currentProblem = null;
-	let userAnswer = '';
 	let loading = true;
-	let submitting = false;
 	let error = '';
-	let feedback = null;
+	/** @type {any} */
+	let sessionSummary = null;
+
+	let currentProblemIndex = 0;
+	let totalProblems = 0;
+
+	/** @type {PracticeSession | null} */
+	let practiceSessionComponent = null;
 
 	$: sessionId = $page.params.sessionId;
 
@@ -27,11 +36,13 @@
 
 	async function loadSession() {
 		loading = true;
+		error = '';
 		try {
 			session = await api.get(`/api/practice/session/${sessionId}`);
+			totalProblems = session.total_count || 20; // Default to 20 if not provided
 			await loadNextProblem();
 		} catch (err) {
-			error = err.message || 'Failed to load practice session';
+			error = (/** @type {Error} */ (err)).message || 'Failed to load practice session';
 		} finally {
 			loading = false;
 		}
@@ -39,52 +50,99 @@
 
 	async function loadNextProblem() {
 		try {
-			currentProblem = await api.get(`/api/practice/session/${sessionId}/next`);
-			feedback = null;
-			userAnswer = '';
+			const response = await api.get(`/api/practice/session/${sessionId}/next`);
+			currentProblem = response;
+			currentProblemIndex++;
+
+			if (practiceSessionComponent) {
+				practiceSessionComponent.showProblem(currentProblem);
+			}
 		} catch (err) {
-			if (err.message.includes('completed')) {
-				// Session completed
-				goto(`/progress`);
+			const errorMsg = (/** @type {Error} */ (err)).message;
+			if (errorMsg && errorMsg.includes('completed')) {
+				// Session completed - load summary
+				await loadSessionSummary();
 			} else {
-				error = err.message || 'Failed to load next problem';
+				error = errorMsg || 'Failed to load next problem';
 			}
 		}
 	}
 
-	async function submitAnswer() {
-		if (!userAnswer.trim()) {
-			error = 'Please provide an answer';
-			return;
-		}
-
-		submitting = true;
-		error = '';
-
+	async function loadSessionSummary() {
 		try {
-			feedback = await api.post(`/api/practice/session/${sessionId}/submit`, {
-				problem_id: currentProblem.id,
-				answer: userAnswer
-			});
+			const summary = await api.get(`/api/practice/session/${sessionId}/summary`);
+			sessionSummary = summary;
 		} catch (err) {
-			error = err.message || 'Failed to submit answer';
-		} finally {
-			submitting = false;
+			// Fallback summary if endpoint doesn't exist
+			sessionSummary = {
+				total_problems: currentProblemIndex,
+				correct_count: session?.correct_count || 0,
+				accuracy: session?.correct_count && currentProblemIndex 
+					? Math.round((session.correct_count / currentProblemIndex) * 100) 
+					: 0
+			};
 		}
 	}
 
-	async function nextQuestion() {
+	/**
+	 * @param {CustomEvent<{ problemId: number; answer: string }>} event
+	 */
+	async function handleSubmitAnswer(event) {
+		const { problemId, answer } = event.detail;
+
+		try {
+			const feedback = await api.post(`/api/practice/session/${sessionId}/submit`, {
+				problem_id: problemId,
+				answer: answer
+			});
+
+			if (practiceSessionComponent) {
+				practiceSessionComponent.showFeedback(feedback);
+			}
+		} catch (err) {
+			error = (/** @type {Error} */ (err)).message || 'Failed to submit answer';
+		}
+	}
+
+	/**
+	 * @param {CustomEvent<{ confidence: number }>} event
+	 */
+	async function handleNextProblem(event) {
+		const { confidence } = event.detail;
+
+		// Optionally send confidence rating to backend
+		try {
+			await api.post(`/api/practice/session/${sessionId}/confidence`, {
+				problem_id: currentProblem.id,
+				confidence: confidence
+			});
+		} catch (err) {
+			// Non-critical, continue anyway
+			console.warn('Failed to save confidence rating:', err);
+		}
+
+		// Load next problem
 		await loadNextProblem();
 	}
 
-	async function endSession() {
+	async function handleEndSession() {
 		try {
-			await api.post(`/api/practice/session/${sessionId}/end`);
-			goto('/progress');
+			await api.post(`/api/practice/session/${sessionId}/end`, {});
+			await loadSessionSummary();
 		} catch (err) {
-			error = err.message || 'Failed to end session';
+			error = (/** @type {Error} */ (err)).message || 'Failed to end session';
 		}
 	}
+
+	function handleContinueStudying() {
+		goto('/dashboard');
+	}
+
+	function handleBackToDashboard() {
+		goto('/dashboard');
+	}
+
+	$: currentTopic = session?.study_guide?.title || session?.topic?.name || 'Practice Session';
 </script>
 
 <svelte:head>
@@ -92,138 +150,42 @@
 </svelte:head>
 
 {#if $auth.isAuthenticated}
-	<div class="max-w-3xl mx-auto">
-		{#if loading}
-			<div class="flex justify-center items-center py-12">
-				<div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+	{#if loading}
+		<div class="min-h-screen flex justify-center items-center bg-gradient-to-br from-gray-50 to-gray-100">
+			<div class="text-center">
+				<div class="animate-spin rounded-full h-16 w-16 border-b-4 border-indigo-600 mx-auto mb-4"></div>
+				<p class="text-gray-600">Loading practice session...</p>
 			</div>
-		{:else if error && !currentProblem}
-			<div class="rounded-md bg-red-50 border border-red-200 p-4 mb-4">
-				<p class="text-sm text-red-800">{error}</p>
-			</div>
-			<a 
-				href="/dashboard" 
-				class="text-indigo-600 hover:text-indigo-700 font-medium"
-			>
-				← Back to Dashboard
-			</a>
-		{:else if session && currentProblem}
-			<div class="space-y-6">
-				<!-- Session Header -->
-				<div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-					<div class="flex justify-between items-center">
-						<div>
-							<h2 class="text-lg font-semibold text-gray-900">
-								{session.study_guide?.title || 'Practice Session'}
-							</h2>
-							<p class="text-sm text-gray-600">
-								Session started {new Date(session.started_at).toLocaleTimeString()}
-							</p>
-						</div>
-						<button
-							on:click={endSession}
-							class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 
-								rounded-md hover:bg-gray-200 transition-colors"
-						>
-							End Session
-						</button>
-					</div>
+		</div>
+	{:else if error && !currentProblem}
+		<div class="min-h-screen flex items-center justify-center p-4">
+			<div class="max-w-md w-full">
+				<div class="rounded-md bg-red-50 border border-red-200 p-4 mb-4">
+					<p class="text-sm text-red-800">{error}</p>
 				</div>
-
-				<!-- Problem Card -->
-				<div class="bg-white rounded-lg shadow-md border border-gray-200 p-8">
-					<div class="mb-6">
-						<div class="flex items-center justify-between mb-4">
-							<span class="text-sm font-medium text-indigo-600">
-								Question {currentProblem.order || ''}
-							</span>
-							{#if currentProblem.difficulty}
-								<span class="px-2 py-1 text-xs font-medium rounded 
-									{currentProblem.difficulty === 'easy' ? 'bg-green-100 text-green-800' :
-									currentProblem.difficulty === 'medium' ? 'bg-yellow-100 text-yellow-800' :
-									'bg-red-100 text-red-800'}">
-									{currentProblem.difficulty}
-								</span>
-							{/if}
-						</div>
-						
-						<h3 class="text-xl font-semibold text-gray-900 mb-4">
-							{currentProblem.question}
-						</h3>
-					</div>
-
-					{#if !feedback}
-						<div class="space-y-4">
-							<div>
-								<label for="answer" class="block text-sm font-medium text-gray-700 mb-2">
-									Your Answer
-								</label>
-								<textarea
-									id="answer"
-									bind:value={userAnswer}
-									rows="4"
-									class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm 
-										focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-									placeholder="Type your answer here..."
-								/>
-							</div>
-
-							{#if error}
-								<div class="rounded-md bg-red-50 border border-red-200 p-3">
-									<p class="text-sm text-red-800">{error}</p>
-								</div>
-							{/if}
-
-							<button
-								on:click={submitAnswer}
-								disabled={submitting || !userAnswer.trim()}
-								class="w-full px-4 py-2 text-base font-medium text-white bg-indigo-600 
-									rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 
-									focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 
-									disabled:cursor-not-allowed transition-colors"
-							>
-								{submitting ? 'Submitting...' : 'Submit Answer'}
-							</button>
-						</div>
-					{:else}
-						<div class="space-y-4">
-							<div class="rounded-md p-4 
-								{feedback.is_correct ? 'bg-green-50 border border-green-200' : 'bg-yellow-50 border border-yellow-200'}">
-								<div class="flex items-start">
-									<div class="text-2xl mr-3">
-										{feedback.is_correct ? '✅' : '💭'}
-									</div>
-									<div class="flex-1">
-										<h4 class="font-semibold mb-2 
-											{feedback.is_correct ? 'text-green-800' : 'text-yellow-800'}">
-											{feedback.is_correct ? 'Correct!' : 'Not quite right'}
-										</h4>
-										{#if feedback.feedback}
-											<p class="text-sm text-gray-700">{feedback.feedback}</p>
-										{/if}
-									</div>
-								</div>
-							</div>
-
-							{#if currentProblem.correct_answer}
-								<div class="rounded-md bg-blue-50 border border-blue-200 p-4">
-									<h4 class="font-semibold text-blue-900 mb-2">Correct Answer:</h4>
-									<p class="text-sm text-gray-700">{currentProblem.correct_answer}</p>
-								</div>
-							{/if}
-
-							<button
-								on:click={nextQuestion}
-								class="w-full px-4 py-2 text-base font-medium text-white bg-indigo-600 
-									rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 
-									focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
-							>
-								Next Question →
-							</button>
-						</div>
-					{/if}
-				</div>
+				<a 
+					href="/dashboard" 
+					class="inline-flex items-center gap-2 text-indigo-600 hover:text-indigo-700 font-medium"
+				>
+					← Back to Dashboard
+				</a>
 			</div>
-		{/if}
-	</div>
+		</div>
+	{:else if sessionSummary}
+		<SessionSummary
+			summary={sessionSummary}
+			on:continue={handleContinueStudying}
+			on:dashboard={handleBackToDashboard}
+		/>
+	{:else if session && currentProblem}
+		<PracticeSession
+			bind:this={practiceSessionComponent}
+			{currentTopic}
+			{totalProblems}
+			{currentProblemIndex}
+			on:submitAnswer={handleSubmitAnswer}
+			on:nextProblem={handleNextProblem}
+			on:endSession={handleEndSession}
+		/>
+	{/if}
 {/if}
