@@ -111,7 +111,12 @@ function createAuthStore() {
         password,
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error("Supabase registration error:", error);
+        throw error;
+      }
+
+      console.log("Registration data:", data);
 
       if (data.session && data.user) {
         const user = data.user;

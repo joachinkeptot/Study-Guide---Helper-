@@ -2,7 +2,9 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { auth } from '$stores/auth-supabase';
-	import api from '$lib/api.js';
+	import supabaseAPI from '$lib/supabase-api.js';
+	import { supabase } from '$lib/supabase.js';
+	import { callOllama, checkOllamaStatus } from '$lib/ollama-api.js';
 	import FileUpload from '$lib/components/FileUpload.svelte';
 	import GuideCard from '$lib/components/GuideCard.svelte';
 	import GuideDetail from '$lib/components/GuideDetail.svelte';
@@ -13,6 +15,7 @@
 	let loading = true;
 	let uploadError = '';
 	let loadError = '';
+	let processingGuideId = null;
 	
 	/** @type {number | null} */
 	let selectedGuideId = null;
@@ -32,10 +35,10 @@
 		loading = true;
 		loadError = '';
 		try {
-			// Use pagination to load faster
-			const data = await api.get('/api/guides?limit=50');
-			guides = data.guides || [];
+			const data = await supabaseAPI.studyGuides.getAll();
+			guides = data || [];
 		} catch (err) {
+			console.error('Load guides error:', err);
 			loadError = (/** @type {Error} */ (err)).message || 'Failed to load study guides';
 		} finally {
 			loading = false;
@@ -47,36 +50,201 @@
 	 */
 	async function handleUpload(event) {
 		uploadError = '';
-		const { formData, onSuccess, onError } = event.detail;
+		const { file, onSuccess, onError } = event.detail;
 
 		try {
-			// Call your API endpoint for file upload
-			const response = await fetch(
-				`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001'}/api/guides/upload`,
-				{
-					method: 'POST',
-					headers: {
-						'Authorization': `Bearer ${$auth.token}`
-					},
-					body: formData
-				}
+			// Upload file to Supabase Storage
+			const fileName = `${Date.now()}_${file.name}`;
+			const { data: uploadData, error: uploadError } = await supabase.storage
+				.from('study-materials')
+				.upload(fileName, file);
+
+			if (uploadError) {
+				console.error('Upload error:', uploadError);
+				throw uploadError;
+			}
+
+			// Read file content
+			const fileContent = await file.text();
+			
+			// Create study guide record with parsed content
+			const guide = await supabaseAPI.studyGuides.create(
+				file.name.replace(/\.[^/.]+$/, ''), // Remove extension for title
+				file.name,
+				{ file_path: uploadData.path, content: fileContent }
 			);
 
-			if (!response.ok) {
-				const errorData = await response.json().catch(() => ({}));
-				const errorMsg = errorData.error || errorData.message || 'Upload failed';
-				uploadError = errorMsg;
-				onError(errorMsg);
-				return;
-			}
+			console.log('Study guide created:', guide);
+
+			// Process the file content to generate topics and problems
+			await processStudyGuide(guide.id, fileContent, file.name);
 
 			// Reload guides after successful upload
 			await loadGuides();
 			onSuccess();
 		} catch (err) {
+			console.error('Upload error:', err);
 			const errorMsg = (/** @type {Error} */ (err)).message || 'Upload failed. Please try again.';
 			uploadError = errorMsg;
 			onError(errorMsg);
+		}
+	}
+
+	/**
+	 * Process uploaded file to generate topics and problems using Claude
+	 * @param {number} guideId
+	 * @param {string} content
+	 * @param {string} fileName
+	 */
+	async function processStudyGuide(guideId, content, fileName) {
+		try {
+			console.log('Processing study guide...', guideId);
+
+			// Create a prompt to extract topics and generate questions
+			const prompt = `You are helping to create a study guide. I've uploaded a document titled "${fileName}".
+
+Here's the content:
+${content.substring(0, 10000)} ${content.length > 10000 ? '...(truncated)' : ''}
+
+Please analyze this content and:
+1. Identify 3-5 main topics covered in the material
+2. For each topic, create 3-5 practice questions (mix of multiple choice and short answer)
+
+Return your response in this exact JSON format:
+{
+  "topics": [
+    {
+      "name": "Topic Name",
+      "description": "Brief description of what this topic covers",
+      "problems": [
+        {
+          "question": "Question text?",
+          "type": "multiple_choice",
+          "options": ["Option A", "Option B", "Option C", "Option D"],
+          "correct_answer": "Option A",
+          "explanation": "Why this is correct"
+        },
+        {
+          "question": "Question text?",
+          "type": "short_answer",
+          "correct_answer": "Expected answer",
+          "explanation": "Explanation of the answer"
+        }
+      ]
+    }
+  ]
+}`;
+
+			// Call Ollama API (local, free alternative to Claude)
+			let response;
+			let parsedContent;
+			
+			try {
+				// Check if Ollama is running
+				const ollamaRunning = await checkOllamaStatus();
+				if (!ollamaRunning) {
+					throw new Error('Ollama is not running. Please start it with: ollama serve');
+				}
+
+				console.log('Calling Ollama API...');
+				response = await callOllama(
+					prompt,
+					'You are an expert educational content creator. Create clear, accurate study questions based on the provided material. Return ONLY valid JSON, no other text.',
+					'llama3.1:latest'
+				);
+				console.log('Ollama response:', response);
+				
+				// Parse the response
+				if (response.content && response.content[0]?.text) {
+					const responseText = response.content[0].text;
+					// Extract JSON from the response
+					const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+					if (jsonMatch) {
+						parsedContent = JSON.parse(jsonMatch[0]);
+					} else {
+						throw new Error('Could not find JSON in Claude response');
+					}
+				} else {
+					throw new Error('Invalid response from Ollama API');
+				}
+			} catch (ollamaError) {
+				console.error('Ollama API error:', ollamaError);
+				console.warn('Falling back to sample questions...');
+				
+				// Fallback: Generate sample questions based on content
+				parsedContent = {
+					topics: [
+						{
+							name: "Key Concepts from " + fileName,
+							description: "Main ideas and concepts covered in the material",
+							problems: [
+								{
+									question: "What is the main topic covered in this material?",
+									type: "short_answer",
+									correct_answer: "Based on the uploaded content",
+									explanation: "This question asks you to identify the central theme."
+								},
+								{
+									question: "Which of the following best describes the content?",
+									type: "multiple_choice",
+									options: ["Concept A", "Concept B", "Concept C", "Concept D"],
+									correct_answer: "Concept A",
+									explanation: "Review the material to understand the main focus."
+								},
+								{
+									question: "True or False: The material covers important foundational concepts?",
+									type: "multiple_choice",
+									options: ["True", "False"],
+									correct_answer: "True",
+									explanation: "Most study materials focus on foundational knowledge."
+								}
+							]
+						}
+					]
+				};
+				
+				alert('⚠️ Ollama API is not available. Generated sample questions instead.\n\nTo fix:\n1. Install Ollama: https://ollama.com\n2. Pull a model: ollama pull llama3.1\n3. Start Ollama: ollama serve');
+			}
+
+			// Create topics and problems
+			if (parsedContent.topics && Array.isArray(parsedContent.topics)) {
+				for (let i = 0; i < parsedContent.topics.length; i++) {
+					const topicData = parsedContent.topics[i];
+					
+					// Create topic
+					const topic = await supabaseAPI.topics.create(
+						guideId,
+						topicData.name,
+						topicData.description || '',
+						i
+					);
+
+					console.log('Created topic:', topic);
+
+					// Create problems for this topic
+					if (topicData.problems && Array.isArray(topicData.problems)) {
+						const problems = topicData.problems.map((/** @type {any} */ p) => ({
+							topic_id: topic.id,
+							question_text: p.question,
+							problem_type: p.type,
+							options: p.options || null,
+							correct_answer: p.correct_answer,
+							explanation: p.explanation || '',
+							hints: p.hints || null,
+							hint_penalty: 0.1
+						}));
+
+						await supabaseAPI.problems.createBulk(problems);
+						console.log(`Created ${problems.length} problems for topic ${topic.name}`);
+					}
+				}
+			}
+
+			console.log('Study guide processing complete!');
+		} catch (err) {
+			console.error('Error processing study guide:', err);
+			// Re-throw the error so the caller can handle it
+			throw err;
 		}
 	}
 
@@ -87,20 +255,18 @@
 		const { guideId } = event.detail;
 		try {
 			// Create a new practice session
-			const response = await api.post('/api/practice/start', {
-				guide_id: guideId
-			});
-			const sessionData = response.session || response;
+			const sessionData = await supabaseAPI.practice.startSession(guideId);
 			goto(`/practice/${sessionData.id}`);
 		} catch (err) {
+			console.error('Start practice error:', err);
 			const errorMsg = (/** @type {Error} */ (err)).message || 'Failed to start practice session';
 			// Show error in a more user-friendly way
 			if (confirm(`${errorMsg}\n\nWould you like to view the guide details to check for topics and problems?`)) {
 				selectedGuideId = guideId;
 				loadingDetail = true;
 				try {
-					const guideData = await api.get(`/api/guides/${guideId}`);
-					selectedGuide = guideData.guide || guideData;
+					const guideData = await supabaseAPI.studyGuides.getById(guideId);
+					selectedGuide = guideData;
 				} catch {
 					alert('Failed to load guide details');
 					selectedGuideId = null;
@@ -121,9 +287,10 @@
 
 		try {
 			// Load guide details with topics and sessions
-			const guideData = await api.get(`/api/guides/${guideId}`);
-			selectedGuide = guideData.guide || guideData;
+			const guideData = await supabaseAPI.studyGuides.getById(guideId);
+			selectedGuide = guideData;
 		} catch (err) {
+			console.error('Load guide details error:', err);
 			alert((/** @type {Error} */ (err)).message || 'Failed to load guide details');
 			selectedGuideId = null;
 		} finally {
@@ -137,9 +304,10 @@
 	async function handleDelete(event) {
 		const { guideId } = event.detail;
 		try {
-			await api.delete(`/api/guides/${guideId}`);
+			await supabaseAPI.studyGuides.delete(guideId);
 			await loadGuides();
 		} catch (err) {
+			console.error('Delete guide error:', err);
 			alert((/** @type {Error} */ (err)).message || 'Failed to delete guide');
 		}
 	}
@@ -148,15 +316,12 @@
 	 * @param {CustomEvent<{ guideId: number; topicIds: number[] }>} event
 	 */
 	async function handleStartPractice(event) {
-		const { guideId, topicIds } = event.detail;
+		const { guideId } = event.detail;
 		try {
-			const response = await api.post('/api/practice/start', {
-				guide_id: guideId,
-				topic_ids: topicIds.length > 0 ? topicIds : undefined
-			});
-			const sessionData = response.session || response;
+			const sessionData = await supabaseAPI.practice.startSession(guideId);
 			goto(`/practice/${sessionData.id}`);
 		} catch (err) {
+			console.error('Start practice error:', err);
 			alert((/** @type {Error} */ (err)).message || 'Failed to start practice session');
 		}
 	}
@@ -164,6 +329,63 @@
 	function handleBack() {
 		selectedGuideId = null;
 		selectedGuide = null;
+	}
+
+	/**
+	 * @param {CustomEvent<{ guideId: number }>} event
+	 */
+	async function handleProcess(event) {
+		const { guideId } = event.detail;
+		
+		if (!confirm('This will use AI to analyze your document and generate study topics and practice questions. Continue?')) {
+			return;
+		}
+
+		processingGuideId = guideId;
+
+		try {
+			// Find the guide
+			const guide = guides.find(g => g.id === guideId);
+			if (!guide) {
+				throw new Error('Guide not found');
+			}
+
+			console.log('Found guide:', guide);
+
+			// Get the file from storage
+			const filePath = guide.parsed_content?.file_path;
+			console.log('Attempting to download file from:', filePath);
+
+			if (!filePath) {
+				throw new Error('File path not found in guide data');
+			}
+
+			const { data: fileData, error: downloadError } = await supabase.storage
+				.from('study-materials')
+				.download(filePath);
+
+			if (downloadError) {
+				console.error('Download error:', downloadError);
+				throw new Error('Could not download file: ' + downloadError.message);
+			}
+
+			// Read file content
+			const content = await fileData.text();
+			console.log('File content length:', content.length);
+
+			// Process the guide
+			await processStudyGuide(guideId, content, guide.original_filename || guide.title);
+
+			// Reload guides to show updated topic count
+			await loadGuides();
+			
+			alert('Study guide processed successfully! Topics and questions have been generated.');
+		} catch (err) {
+			console.error('Process guide error:', err);
+			alert((/** @type {Error} */ (err)).message || 'Failed to process guide');
+		} finally {
+			processingGuideId = null;
+		}
 	}
 </script>
 
@@ -237,12 +459,31 @@
 						<!-- Guides Grid -->
 						<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 							{#each guides as guide (guide.id)}
-								<GuideCard
-									{guide}
-									on:study={handleStudy}
-									on:viewDetails={handleViewDetails}
-									on:delete={handleDelete}
-								/>
+								{#if processingGuideId === guide.id}
+									<!-- Show processing state -->
+									<div class="bg-white rounded-lg shadow-sm border border-indigo-200 p-6">
+										<div class="text-center">
+											<div class="text-5xl mb-4 animate-pulse">🤖</div>
+											<h3 class="text-lg font-semibold text-gray-900 mb-2">
+												{guide.title}
+											</h3>
+											<p class="text-sm text-indigo-600 mb-4">
+												Processing with AI... This may take 10-30 seconds.
+											</p>
+											<div class="w-full bg-gray-200 rounded-full h-2">
+												<div class="bg-indigo-600 h-2 rounded-full animate-pulse" style="width: 70%"></div>
+											</div>
+										</div>
+									</div>
+								{:else}
+									<GuideCard
+										{guide}
+										on:study={handleStudy}
+										on:viewDetails={handleViewDetails}
+										on:delete={handleDelete}
+										on:process={handleProcess}
+									/>
+								{/if}
 							{/each}
 						</div>
 					{/if}

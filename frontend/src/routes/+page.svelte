@@ -1,7 +1,7 @@
 <script>
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { auth } from '$stores/auth';
+	import { auth } from '$stores/auth-supabase';
 
 	// Redirect to dashboard if already logged in
 	onMount(() => {

@@ -31,8 +31,13 @@
 		}
 	}
 
+	function handleProcess() {
+		dispatch('process', { guideId: guide.id });
+	}
+
 	$: masteryPercentage = guide.mastery_percentage || 0;
 	$: topicCount = guide.topic_count || 0;
+	$: needsProcessing = topicCount === 0;
 </script>
 
 <div class="bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
@@ -82,14 +87,25 @@
 
 		<!-- Actions -->
 		<div class="flex flex-wrap gap-2">
-			<button
-				on:click={handleStudy}
-				class="flex-1 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md 
-					hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 
-					focus:ring-offset-2 transition-colors"
-			>
-				Study Now
-			</button>
+			{#if needsProcessing}
+				<button
+					on:click={handleProcess}
+					class="flex-1 px-4 py-2 bg-yellow-600 text-white text-sm font-medium rounded-md 
+						hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-yellow-500 
+						focus:ring-offset-2 transition-colors"
+				>
+					🤖 Generate Topics
+				</button>
+			{:else}
+				<button
+					on:click={handleStudy}
+					class="flex-1 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md 
+						hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 
+						focus:ring-offset-2 transition-colors"
+				>
+					Study Now
+				</button>
+			{/if}
 			<button
 				on:click={handleViewDetails}
 				class="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-md 

@@ -7,9 +7,13 @@
 	let confirmPassword = '';
 	let error = '';
 	let loading = false;
+	let success = false;
+	let needsEmailConfirmation = false;
 
 	async function handleRegister() {
 		error = '';
+		success = false;
+		needsEmailConfirmation = false;
 
 		// Validation
 		if (password !== confirmPassword) {
@@ -25,10 +29,18 @@
 		loading = true;
 
 		try {
-			await auth.register(email, password);
-			// Redirect to dashboard
-			goto('/dashboard');
+			const result = await auth.register(email, password);
+			
+			// Check if email confirmation is required
+			if (result.user && !result.session) {
+				needsEmailConfirmation = true;
+				success = true;
+			} else if (result.session) {
+				// Auto-logged in, redirect to dashboard
+				goto('/dashboard');
+			}
 		} catch (err) {
+			console.error('Registration error:', err);
 			error = err instanceof Error ? err.message : 'Registration failed. Please try again.';
 		} finally {
 			loading = false;
@@ -57,6 +69,14 @@
 			{#if error}
 				<div class="rounded-md bg-red-50 border border-red-200 p-4">
 					<p class="text-sm text-red-800">{error}</p>
+				</div>
+			{/if}
+
+			{#if success && needsEmailConfirmation}
+				<div class="rounded-md bg-green-50 border border-green-200 p-4">
+					<p class="text-sm text-green-800">
+						Account created successfully! Please check your email ({email}) to confirm your account before logging in.
+					</p>
 				</div>
 			{/if}
 

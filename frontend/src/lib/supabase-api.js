@@ -15,13 +15,18 @@ export const studyGuidesAPI = {
       .select(
         `
         *,
-        topics:topics(count)
+        topics:topics(id)
       `
       )
       .order("created_at", { ascending: false });
 
     if (error) throw error;
-    return data;
+
+    // Count topics for each guide
+    return data.map((guide) => ({
+      ...guide,
+      topic_count: guide.topics?.length || 0,
+    }));
   },
 
   /**
@@ -48,6 +53,9 @@ export const studyGuidesAPI = {
 
   /**
    * Create a new study guide
+   * @param {string} title
+   * @param {string|null} originalFilename
+   * @param {any} parsedContent
    */
   create: async (title, originalFilename = null, parsedContent = null) => {
     const {
@@ -451,6 +459,9 @@ export const progressAPI = {
 export const claudeAPI = {
   /**
    * Call Claude API
+   * @param {string} prompt
+   * @param {string|null} systemPrompt
+   * @param {number} maxTokens
    */
   call: async (prompt, systemPrompt = null, maxTokens = 1024) => {
     const { data, error } = await supabase.functions.invoke("call-claude", {

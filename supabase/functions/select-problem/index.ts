@@ -35,7 +35,7 @@ interface TopicProgress {
   last_practiced: string | null;
 }
 
-serve(async (req) => {
+serve(async (req: Request) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -75,7 +75,7 @@ serve(async (req) => {
       .select("problem_id")
       .eq("session_id", sessionId);
 
-    const sessionProblemIds = sessionAttempts?.map((a) => a.problem_id) || [];
+    const sessionProblemIds = sessionAttempts?.map((a: any) => a.problem_id) || [];
     const allExcluded = [...excludeProblemIds, ...sessionProblemIds];
 
     // Get topic progress for weighted selection
@@ -86,7 +86,7 @@ serve(async (req) => {
       .in("topic_id", topicIds);
 
     const progressMap = new Map<number, TopicProgress>();
-    progressData?.forEach((p) => progressMap.set(p.topic_id, p));
+    progressData?.forEach((p: any) => progressMap.set(p.topic_id, p));
 
     // Select topic based on confidence (lower confidence = higher priority)
     const selectedTopicId = selectTopicByConfidence(topicIds, progressMap);
@@ -121,7 +121,7 @@ serve(async (req) => {
       .select("problem_id")
       .eq("session_id", sessionId);
 
-    const attemptedProblemIds = allUserAttempts?.map((a) => a.problem_id) || [];
+    const attemptedProblemIds = allUserAttempts?.map((a: any) => a.problem_id) || [];
 
     // Build query for problems
     let problemQuery = supabaseClient
@@ -146,7 +146,7 @@ serve(async (req) => {
 
     // Prefer new problems (30% chance) or review problems
     const newProblems = problems.filter(
-      (p) => !attemptedProblemIds.includes(p.id)
+      (p: any) => !attemptedProblemIds.includes(p.id)
     );
     const shouldPickNew = Math.random() < 0.3;
 
@@ -181,7 +181,8 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
