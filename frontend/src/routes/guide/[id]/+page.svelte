@@ -24,8 +24,8 @@
 		if (!$auth.isAuthenticated) return;
 
 		try {
-			const response = await api.get(`/api/guides/${guideId}`);
-			guide = response.guide || response;
+			const response = await api.studyGuides.getById(guideId);
+			guide = response;
 		} catch (err) {
 			const errorMessage = err instanceof Error ? err.message : 'Failed to load study guide';
 			error = errorMessage;
@@ -46,10 +46,7 @@
 		startingPractice = true;
 		error = ''; // Clear any previous errors
 		try {
-			const response = await api.post('/api/practice/start', {
-				guide_id: parseInt(guideId)
-			});
-			const sessionData = response.session || response;
+			const sessionData = await api.practice.startSession(parseInt(guideId));
 			// Navigate immediately - problems will load in practice view
 			goto(`/practice/${sessionData.id}`);
 		} catch (err) {
@@ -62,8 +59,8 @@
 	async function handleTopicAdded() {
 		// Reload guide to show new topic
 		try {
-			const response = await api.get(`/api/guides/${guideId}`);
-			guide = response.guide || response;
+			const response = await api.studyGuides.getById(guideId);
+			guide = response;
 		} catch (err) {
 			console.error('Failed to reload guide:', err);
 		}

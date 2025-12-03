@@ -5,9 +5,15 @@ import { browser } from "$app/environment";
 import { supabase } from "$lib/supabase";
 
 /**
+ * @typedef {Object} User
+ * @property {string} id
+ * @property {string | undefined} email
+ */
+
+/**
  * @typedef {Object} AuthState
  * @property {boolean} isAuthenticated
- * @property {Object|null} user
+ * @property {User|null} user
  * @property {string|null} token - Kept for backward compatibility, but session is managed by Supabase
  */
 
@@ -41,7 +47,7 @@ function createAuthStore() {
           isAuthenticated: true,
           user: {
             id: session.user.id,
-            email: session.user.email,
+            email: session.user.email ?? undefined,
           },
           token: session.access_token,
         }));
@@ -56,7 +62,7 @@ function createAuthStore() {
             isAuthenticated: true,
             user: {
               id: session.user.id,
-              email: session.user.email,
+              email: session.user.email ?? undefined,
             },
             token: session.access_token,
           }));
@@ -85,7 +91,7 @@ function createAuthStore() {
           isAuthenticated: true,
           user: {
             id: data.user.id,
-            email: data.user.email,
+            email: data.user.email ?? undefined,
           },
           token: data.session.access_token,
         }));
@@ -107,15 +113,17 @@ function createAuthStore() {
 
       if (error) throw error;
 
-      if (data.session?.user) {
+      if (data.session && data.user) {
+        const user = data.user;
+        const session = data.session;
         update((state) => ({
           ...state,
           isAuthenticated: true,
           user: {
-            id: data.user.id,
-            email: data.user.email,
+            id: user.id,
+            email: user.email ?? undefined,
           },
-          token: data.session.access_token,
+          token: session.access_token,
         }));
       }
 

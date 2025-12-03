@@ -13,6 +13,8 @@
 		await auth.logout();
 		goto('/login');
 	}
+
+	$: userEmail = $auth?.user?.email;
 </script>
 
 <div class="min-h-screen bg-gray-50">
@@ -51,7 +53,7 @@
 				<div class="flex items-center space-x-4">
 					{#if $auth.isAuthenticated}
 						<span class="text-sm text-gray-600">
-							Welcome, <span class="font-medium">{$auth.user?.username || 'User'}</span>
+							Welcome, <span class="font-medium">{userEmail || 'User'}</span>
 						</span>
 						<button 
 							on:click={handleLogout}

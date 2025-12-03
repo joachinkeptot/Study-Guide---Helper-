@@ -1,17 +1,12 @@
-// Import axios for making HTTP requests
-import axios from "axios";
-
 /**
+ * @deprecated Use claudeAPI from supabase-api.js instead
  * @param {string} prompt
  */
+// eslint-disable-next-line no-unused-vars
 export async function callClaude(prompt) {
-  try {
-    const response = await axios.post("/api/claude", { prompt });
-    return response.data;
-  } catch (error) {
-    console.error("Claude API error:", error);
-    throw error;
-  }
+  throw new Error(
+    "callClaude is deprecated. Use claudeAPI from supabase-api.js instead"
+  );
 }
 // @ts-check
 import { browser } from "$app/environment";
