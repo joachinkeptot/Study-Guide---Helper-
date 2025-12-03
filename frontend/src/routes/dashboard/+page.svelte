@@ -8,6 +8,7 @@
 	import GuideCard from '$lib/components/GuideCard.svelte';
 	import GuideDetail from '$lib/components/GuideDetail.svelte';
 	import LoadingSkeleton from '$lib/components/LoadingSkeleton.svelte';
+    import { extractTextFromPDF } from '$lib/pdf.js';
 
 	/** @type {any[]} */
 	let guides = [];
@@ -64,8 +65,13 @@
 				throw uploadError;
 			}
 
-			// Read file content
-			const fileContent = await file.text();
+			// Read file content (handle PDFs properly)
+			let fileContent = '';
+			if (file.type === 'application/pdf') {
+				fileContent = await extractTextFromPDF(file);
+			} else {
+				fileContent = await file.text();
+			}
 			
 			// Create study guide record with parsed content
 			const guide = await supabaseAPI.studyGuides.create(
@@ -77,7 +83,7 @@
 			console.log('Study guide created:', guide);
 
 			// Process the file content to generate topics and problems
-			await processStudyGuide(guide.id, fileContent, file.name);
+			await processStudyGuide(guide.id, fileContent, file.name, uploadData.path);
 
 			// Reload guides after successful upload
 			await loadGuides();
@@ -95,12 +101,16 @@
 	 * @param {number} guideId
 	 * @param {string} content
 	 * @param {string} fileName
+	 * @param {string | null | undefined} [filePath] - Optional path to the uploaded file in storage
 	 */
-	async function processStudyGuide(guideId, content, fileName) {
+	async function processStudyGuide(guideId, content, fileName, filePath = null) {
 		try {
 			console.log('Processing study guide...', guideId);
 
-			// Create a prompt to extract topics and generate questions
+			// Prefer Claude file analysis for PDFs if filePath is available
+			const isPDF = fileName?.toLowerCase().endsWith('.pdf');
+
+			// Create a prompt to extract topics and generate questions (fallback when not using file attachments)
 			const prompt = `You are helping to create a study guide. I've uploaded a document titled "${fileName}".
 
 Here's the content:
@@ -140,12 +150,21 @@ Return your response in this exact JSON format:
 			let parsedContent;
 			
 			try {
-				console.log('Calling Claude API (Haiku 3.5)...');
-				response = await supabaseAPI.claude.call(
-					prompt,
-					'You are an expert educational content creator. Create clear, accurate study questions based on the provided material. Return ONLY valid JSON, no other text.',
-					4096
-				);
+				if (isPDF && filePath) {
+					console.log('Calling Claude API with PDF attachment...');
+					response = await supabaseAPI.claude.analyzeFile(
+						filePath,
+						fileName,
+						4096
+					);
+				} else {
+					console.log('Calling Claude API with text input...');
+					response = await supabaseAPI.claude.call(
+						prompt,
+						'You are an expert educational content creator. Create clear, accurate study questions based on the provided material. Return ONLY valid JSON, no other text.',
+						4096
+					);
+				}
 				console.log('Claude response:', response);
 				
 				// Parse the response
@@ -364,12 +383,18 @@ Return your response in this exact JSON format:
 				throw new Error('Could not download file: ' + downloadError.message);
 			}
 
-			// Read file content
-			const content = await fileData.text();
+			// Read file content (handle PDFs properly)
+			let content = '';
+			const guessedType = guide.original_filename?.toLowerCase().endsWith('.pdf') ? 'application/pdf' : '';
+			if (guessedType === 'application/pdf') {
+				content = await extractTextFromPDF(fileData);
+			} else {
+				content = await fileData.text();
+			}
 			console.log('File content length:', content.length);
 
 			// Process the guide
-			await processStudyGuide(guideId, content, guide.original_filename || guide.title);
+			await processStudyGuide(guideId, content, guide.original_filename || guide.title, filePath);
 
 			// Reload guides to show updated topic count
 			await loadGuides();

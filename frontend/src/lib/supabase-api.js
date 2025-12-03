@@ -497,6 +497,26 @@ export const claudeAPI = {
     if (error) throw error;
     return data;
   },
+
+  /**
+   * Ask Claude to analyze a file stored in Supabase Storage.
+   * @param {string} filePath - path in 'study-materials' bucket
+   * @param {string} fileName - original filename (for MIME inference)
+   * @param {number} maxTokens
+   */
+  analyzeFile: async (filePath, fileName, maxTokens = 2048) => {
+    const { data, error } = await supabase.functions.invoke("call-claude", {
+      body: {
+        filePath,
+        fileName,
+        bucket: "study-materials",
+        task: "extract_topics",
+        maxTokens,
+      },
+    });
+    if (error) throw error;
+    return data;
+  },
 };
 
 // Export all APIs as default

@@ -1,93 +1,25 @@
-# Using Ollama Instead of Claude API
+# Ollama Support Removed
 
-## Overview
+This project now uses Claude API exclusively for topic extraction and question generation.
 
-Your app now uses **Ollama** - a free, local AI alternative to Claude API.
+What changed
 
-## Setup
+- All Ollama client code has been deprecated and is no longer used.
+- The Dashboard analyzes PDFs by forwarding the file from Supabase Storage to the `call-claude` Edge Function.
+- As a fallback for non-PDFs or local previews, client-side parsing is done; generation still happens via Claude.
 
-### 1. Start Ollama (if not running)
+How to configure
 
-```bash
-ollama serve
-```
+- Set `CLAUDE_API_KEY` in your Supabase Edge Function environment.
+- Ensure `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are configured for the function to download files from Storage.
 
-Keep this running in a terminal window.
+Where to look
 
-### 2. Use Your App
+- Edge Function: `supabase/functions/call-claude/index.ts`
+- Frontend calls: `frontend/src/lib/supabase-api.js` (`claudeAPI.call` and `claudeAPI.analyzeFile`)
+- Dashboard flow: `frontend/src/routes/dashboard/+page.svelte`
 
-The app will now automatically:
+Troubleshooting
 
-- Connect to Ollama at `http://localhost:11434`
-- Use the `llama3.1` model you already have installed
-- Generate study topics and questions locally (no API costs!)
-
-## How It Works
-
-1. **Upload a document** → Stored in Supabase
-2. **Click "Generate Topics"** → Ollama analyzes it locally
-3. **AI creates questions** → All on your machine, no external API calls
-4. **Start practicing** → Same as before!
-
-## Benefits of Ollama
-
-✅ **Free** - No API costs
-✅ **Private** - Data stays on your machine  
-✅ **Fast** - Local processing
-✅ **Offline** - Works without internet (after model download)
-
-## Available Models
-
-You currently have:
-
-- `llama3.1:latest` (4.7 GB) - **Currently using this**
-- `gemma2:latest` (5.4 GB)
-- `codegemma:2b` (1.6 GB)
-
-To use a different model, edit `/frontend/src/routes/dashboard/+page.svelte` line 150:
-
-```javascript
-"llama3.1:latest"; // Change to 'gemma2:latest' or other model
-```
-
-## Troubleshooting
-
-### "Ollama is not running" error
-
-**Solution:** Open a terminal and run:
-
-```bash
-ollama serve
-```
-
-### Slow processing
-
-**Try a smaller model:**
-
-```bash
-ollama pull llama3.2  # Smaller, faster model
-```
-
-Then change the model in the code to `'llama3.2'`.
-
-### Quality issues
-
-**Try a larger model:**
-
-```bash
-ollama pull llama3.1:70b  # Much better quality, needs ~40GB
-```
-
-## Testing
-
-1. Make sure Ollama is running: `curl http://localhost:11434/api/tags`
-2. Upload a document in your app
-3. Click "Generate Topics"
-4. Should take 10-30 seconds depending on document size
-
-## Notes
-
-- First generation might be slower as the model loads
-- Subsequent generations will be faster
-- Model stays in memory while Ollama is running
-- Quality is comparable to GPT-3.5, good enough for study questions!
+- If generation fails, the UI will show a fallback and log the function error.
+- Check Supabase Function logs and verify your Claude API key.
