@@ -4,12 +4,14 @@
 	import { goto } from '$app/navigation';
 	import { auth } from '$stores/auth';
 	import api from '$lib/api';
+	import AddTopicModal from '$lib/components/AddTopicModal.svelte';
 
-	/** @type {{ id: number; title: string; description?: string; content?: string; created_at: string; topic?: string } | null} */
+	/** @type {{ id: number; title: string; description?: string; content?: string; created_at: string; topic?: string; topics?: any[] } | null} */
 	let guide = null;
 	let loading = true;
 	let error = '';
 	let startingPractice = false;
+	let showAddTopicModal = false;
 
 	$: guideId = $page.params.id;
 
@@ -47,6 +49,16 @@
 			error = errorMessage;
 		} finally {
 			startingPractice = false;
+		}
+	}
+
+	async function handleTopicAdded() {
+		// Reload guide to show new topic
+		try {
+			const response = await api.get(`/api/guides/${guideId}`);
+			guide = response.guide || response;
+		} catch (err) {
+			console.error('Failed to reload guide:', err);
 		}
 	}
 
@@ -128,6 +140,69 @@
 						</div>
 					{/if}
 
+					<!-- Topics Section -->
+					<div class="mb-6">
+						<div class="flex justify-between items-center mb-4">
+							<h2 class="text-lg font-semibold text-gray-900">Topics</h2>
+							<button
+								on:click={() => (showAddTopicModal = true)}
+								class="px-3 py-1 text-sm font-medium text-indigo-600 hover:text-indigo-700 
+									border border-indigo-300 rounded-md hover:bg-indigo-50 
+									focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+							>
+								+ Add Topic
+							</button>
+						</div>
+
+						{#if guide.topics && guide.topics.length > 0}
+							<div class="space-y-3">
+								{#each guide.topics as topic}
+									<div class="p-4 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors">
+										<div class="flex justify-between items-start">
+											<div class="flex-1">
+												<h3 class="font-medium text-gray-900">{topic.name}</h3>
+												{#if topic.description}
+													<p class="text-sm text-gray-600 mt-1">{topic.description}</p>
+												{/if}
+												<p class="text-xs text-gray-500 mt-2">
+													{topic.problem_count || 0} practice problem{topic.problem_count === 1 ? '' : 's'}
+												</p>
+											</div>
+										</div>
+									</div>
+								{/each}
+							</div>
+						{:else}
+							<div class="text-center py-8 bg-gray-50 border border-gray-200 rounded-lg">
+								<svg
+									class="mx-auto h-12 w-12 text-gray-400"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke="currentColor"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+									/>
+								</svg>
+								<h3 class="mt-2 text-sm font-medium text-gray-900">No topics yet</h3>
+								<p class="mt-1 text-sm text-gray-500">
+									Add topics to organize your study material
+								</p>
+								<button
+									on:click={() => (showAddTopicModal = true)}
+									class="mt-4 px-4 py-2 text-sm font-medium text-white bg-indigo-600 
+										rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 
+										focus:ring-offset-2 focus:ring-indigo-500"
+								>
+									Add Your First Topic
+								</button>
+							</div>
+						{/if}
+					</div>
+
 					<div class="mt-8 pt-6 border-t border-gray-200">
 						<button
 							on:click={startPractice}
@@ -144,4 +219,13 @@
 			</div>
 		{/if}
 	</div>
+
+	<!-- Add Topic Modal -->
+	{#if guideId}
+		<AddTopicModal
+			bind:show={showAddTopicModal}
+			guideId={parseInt(guideId)}
+			on:topicAdded={handleTopicAdded}
+		/>
+	{/if}
 {/if}

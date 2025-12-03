@@ -366,10 +366,165 @@ class DocumentParser:
             from app.services.llm_adapter import get_default_provider
             self.llm_provider = get_default_provider()
         
-        # Use LLM to parse and structure the document
-        structured_data = self.llm_provider.parse_document(text)
+        # Truncate text if too long (keep first 15000 chars for better LLM processing)
+        if len(text) > 15000:
+            logger.info(f"Text too long ({len(text)} chars), truncating to 15000 for LLM processing")
+            text = text[:15000] + "\n\n[Content truncated for processing...]"
         
-        return structured_data
+        # Use LLM to parse and structure the document
+        try:
+            structured_data = self.llm_provider.parse_document(text)
+            
+            # Validate that topics were extracted
+            if not structured_data.get('topics'):
+                logger.warning("LLM returned no topics, attempting to extract from text structure")
+                # Try to extract basic structure from text
+                structured_data = self._extract_basic_structure(text)
+            
+            return structured_data
+        except Exception as e:
+            logger.error(f"LLM structuring failed: {e}")
+            # Fallback to basic extraction
+            return self._extract_basic_structure(text)
+    
+    def _extract_basic_structure(self, text: str) -> Dict[str, Any]:
+        """
+        Extract basic topic structure from text when LLM fails.
+        Uses heuristics to identify topics from headings, numbered sections, etc.
+        
+        Args:
+            text: Raw text content
+            
+        Returns:
+            Basic structured data with topics
+        """
+        import re
+        
+        topics = []
+        lines = text.split('\n')
+        
+        # Pattern 1: Look for numbered sections (1., 2., etc.)
+        section_pattern = r'^\s*\d+\.\s+(.+)$'
+        
+        # Pattern 2: Look for UPPERCASE HEADINGS
+        uppercase_pattern = r'^([A-Z][A-Z\s]{10,})$'
+        
+        # Pattern 3: Look for Chapter/Section headers
+        chapter_pattern = r'^(Chapter|Section|Topic|Unit|Lesson)\s+\d+:?\s*(.+)$'
+        
+        current_topic_lines = []
+        current_topic_name = None
+        
+        for i, line in enumerate(lines):
+            line = line.strip()
+            if not line:
+                continue
+            
+            # Check for section headers
+            match_section = re.match(section_pattern, line)
+            match_uppercase = re.match(uppercase_pattern, line)
+            match_chapter = re.match(chapter_pattern, line, re.IGNORECASE)
+            
+            if match_section or match_uppercase or match_chapter:
+                # Save previous topic if exists
+                if current_topic_name and current_topic_lines:
+                    topics.append({
+                        'name': current_topic_name,
+                        'description': ' '.join(current_topic_lines[:3]),  # First 3 lines as description
+                        'difficulty': 'intermediate',
+                        'key_concepts': self._extract_key_concepts(' '.join(current_topic_lines[:10]))
+                    })
+                    current_topic_lines = []
+                
+                # Start new topic
+                if match_section:
+                    current_topic_name = match_section.group(1).strip()
+                elif match_uppercase:
+                    current_topic_name = match_uppercase.group(1).strip().title()
+                elif match_chapter:
+                    current_topic_name = match_chapter.group(2).strip()
+            else:
+                # Accumulate content for current topic
+                if current_topic_name:
+                    current_topic_lines.append(line)
+        
+        # Add last topic
+        if current_topic_name and current_topic_lines:
+            topics.append({
+                'name': current_topic_name,
+                'description': ' '.join(current_topic_lines[:3]),
+                'difficulty': 'intermediate',
+                'key_concepts': self._extract_key_concepts(' '.join(current_topic_lines[:10]))
+            })
+        
+        # If no topics found, create a generic one based on text content
+        if not topics:
+            # Look for key terms that might indicate the subject
+            subject_keywords = {
+                'probability': ['probability', 'random', 'expected', 'variance', 'distribution'],
+                'calculus': ['derivative', 'integral', 'limit', 'continuous', 'differential'],
+                'algebra': ['equation', 'polynomial', 'matrix', 'linear', 'quadratic'],
+                'statistics': ['mean', 'median', 'standard deviation', 'sample', 'population'],
+                'physics': ['force', 'energy', 'velocity', 'momentum', 'mass'],
+                'chemistry': ['element', 'compound', 'reaction', 'molecule', 'atom']
+            }
+            
+            text_lower = text.lower()
+            detected_subject = None
+            max_count = 0
+            
+            for subject, keywords in subject_keywords.items():
+                count = sum(1 for keyword in keywords if keyword in text_lower)
+                if count > max_count:
+                    max_count = count
+                    detected_subject = subject
+            
+            topic_name = detected_subject.title() if detected_subject else "General Topics"
+            
+            topics.append({
+                'name': topic_name,
+                'description': f'Study material covering {topic_name.lower()} concepts',
+                'difficulty': 'intermediate',
+                'key_concepts': self._extract_key_concepts(text[:1000])
+            })
+        
+        return {
+            'topics': topics,
+            'overall_summary': text[:500] + '...' if len(text) > 500 else text
+        }
+    
+    def _extract_key_concepts(self, text: str) -> list:
+        """
+        Extract key concepts from text using simple heuristics.
+        
+        Args:
+            text: Text snippet to extract concepts from
+            
+        Returns:
+            List of key concept strings
+        """
+        import re
+        
+        # Look for capitalized terms, formulas, and key phrases
+        concepts = set()
+        
+        # Pattern for capitalized terms (2+ words)
+        cap_pattern = r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b'
+        concepts.update(re.findall(cap_pattern, text))
+        
+        # Pattern for mathematical formulas/notation
+        formula_pattern = r'\b[A-Z]\([A-Z]\)|[A-Z]\s*=\s*'
+        if re.search(formula_pattern, text):
+            concepts.add('Mathematical Formulas')
+        
+        # Limit to 10 most meaningful concepts
+        concepts = list(concepts)[:10]
+        
+        # If no concepts found, return generic ones
+        if not concepts:
+            concepts = ['Key Definitions', 'Important Theorems', 'Practice Problems']
+        
+        return concepts
     
     def parse_file_path(self, file_path: str, use_llm: bool = True) -> Dict[str, Any]:
         """

@@ -230,3 +230,103 @@ def delete_guide(current_user, guide_id):
         db.session.rollback()
         current_app.logger.error(f"Delete guide error: {str(e)}")
         return jsonify({'error': 'An error occurred while deleting the guide'}), 500
+
+
+@api_bp.route('/guides/<int:guide_id>/topics', methods=['POST'])
+@token_required
+def add_topic_to_guide(current_user, guide_id):
+    """
+    Manually add a topic to a study guide.
+    
+    Expected JSON:
+    {
+        "name": "Topic Name",
+        "description": "Optional description",
+        "generate_problems": true  // Optional, default false
+    }
+    """
+    try:
+        # Verify guide belongs to user
+        guide = StudyGuide.query.filter_by(id=guide_id, user_id=current_user.id).first()
+        
+        if not guide:
+            return jsonify({'error': 'Study guide not found'}), 404
+        
+        data = request.get_json()
+        
+        if not data or not data.get('name'):
+            return jsonify({'error': 'Topic name is required'}), 400
+        
+        # Get max order index for this guide
+        max_order = db.session.query(db.func.max(Topic.order_index)).filter_by(
+            study_guide_id=guide_id
+        ).scalar()
+        
+        # Create topic
+        topic = Topic(
+            study_guide_id=guide_id,
+            name=data['name'].strip(),
+            description=data.get('description', '').strip(),
+            order_index=(max_order or 0) + 1
+        )
+        
+        db.session.add(topic)
+        db.session.flush()  # Get topic.id
+        
+        # Optionally generate problems for this topic
+        if data.get('generate_problems', False):
+            try:
+                llm_provider = get_default_provider()
+                
+                # Use guide's parsed content for context if available
+                context = ""
+                if guide.parsed_content and guide.parsed_content.get('raw_text'):
+                    context = guide.parsed_content.get('raw_text', '')[:2000]
+                
+                # Generate problems with context
+                difficulty = data.get('difficulty', 'intermediate')
+                problems_list = llm_provider.generate_problems(
+                    topic=f"{topic.name}\n\nContext: {context}",
+                    num_problems=data.get('num_problems', 5),
+                    difficulty=difficulty
+                )
+                
+                # Create problem records
+                for problem_data in problems_list:
+                    problem_type_str = problem_data.get('type', 'short_answer')
+                    
+                    type_mapping = {
+                        'multiple_choice': ProblemType.MULTIPLE_CHOICE,
+                        'short_answer': ProblemType.SHORT_ANSWER,
+                        'problem_solving': ProblemType.FREE_RESPONSE,
+                        'free_response': ProblemType.FREE_RESPONSE
+                    }
+                    
+                    problem_type = type_mapping.get(problem_type_str, ProblemType.SHORT_ANSWER)
+                    
+                    problem = Problem(
+                        topic_id=topic.id,
+                        question_text=problem_data.get('question', ''),
+                        problem_type=problem_type,
+                        options=problem_data.get('options'),
+                        correct_answer=problem_data.get('correct_answer', ''),
+                        explanation=problem_data.get('explanation', ''),
+                        hints=problem_data.get('hints', [])
+                    )
+                    db.session.add(problem)
+                    
+            except Exception as llm_error:
+                current_app.logger.warning(f"Problem generation error: {str(llm_error)}")
+                # Continue without problems
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Topic added successfully',
+            'topic': topic.to_dict(include_problems=True)
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Add topic error: {str(e)}")
+        return jsonify({'error': 'An error occurred while adding the topic'}), 500
