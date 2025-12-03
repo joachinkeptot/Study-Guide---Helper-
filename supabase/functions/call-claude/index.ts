@@ -1,4 +1,9 @@
 import { serve } from "https://deno.land/std@0.192.0/http/server.ts";
+import { 
+  checkRateLimit, 
+  createRateLimitHeaders, 
+  getRateLimitErrorResponse 
+} from "../_shared/rateLimit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -18,6 +23,24 @@ serve(async (req: Request) => {
   }
 
   try {
+    // Rate limiting - 10 requests per minute per user
+    const authHeader = req.headers.get("Authorization");
+    const identifier = authHeader || req.headers.get("x-client-info") || "anonymous";
+    
+    const rateLimit = checkRateLimit(identifier, {
+      maxRequests: 10,
+      windowMs: 60000, // 1 minute
+    });
+
+    if (!rateLimit.allowed) {
+      return getRateLimitErrorResponse(rateLimit.resetTime, corsHeaders);
+    }
+
+    const rateLimitHeaders = createRateLimitHeaders(
+      rateLimit.remaining,
+      rateLimit.resetTime,
+      10
+    );
     const {
       prompt,
       systemPrompt,
@@ -45,7 +68,7 @@ serve(async (req: Request) => {
     const messages: any[] = [{ role: "user", content: prompt }];
 
     const payload: any = {
-      model: "claude-3-5-sonnet-20241022",
+      model: "claude-3-5-haiku-20241022",
       max_tokens: maxTokens,
       messages: messages,
     };
@@ -72,7 +95,11 @@ serve(async (req: Request) => {
     const data = await response.json();
 
     return new Response(JSON.stringify(data), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { 
+        ...corsHeaders, 
+        ...rateLimitHeaders,
+        "Content-Type": "application/json" 
+      },
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';

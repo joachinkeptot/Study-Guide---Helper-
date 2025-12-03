@@ -2,12 +2,14 @@
 // @ts-ignore
 import { createClient } from "@supabase/supabase-js";
 import { browser } from "$app/environment";
+import { config } from "./config";
+import { logger } from "./logger";
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseUrl = config.supabase.url;
+const supabaseAnonKey = config.supabase.anonKey;
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error("Missing Supabase environment variables");
+  logger.error("Missing Supabase environment variables");
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {

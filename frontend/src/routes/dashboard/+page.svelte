@@ -4,7 +4,6 @@
 	import { auth } from '$stores/auth-supabase';
 	import supabaseAPI from '$lib/supabase-api.js';
 	import { supabase } from '$lib/supabase.js';
-	import { callOllama, checkOllamaStatus } from '$lib/ollama-api.js';
 	import FileUpload from '$lib/components/FileUpload.svelte';
 	import GuideCard from '$lib/components/GuideCard.svelte';
 	import GuideDetail from '$lib/components/GuideDetail.svelte';
@@ -15,6 +14,7 @@
 	let loading = true;
 	let uploadError = '';
 	let loadError = '';
+	/** @type {number | null} */
 	let processingGuideId = null;
 	
 	/** @type {number | null} */
@@ -135,24 +135,18 @@ Return your response in this exact JSON format:
   ]
 }`;
 
-			// Call Ollama API (local, free alternative to Claude)
+			// Call Claude API (using Haiku 3.5 for cost efficiency)
 			let response;
 			let parsedContent;
 			
 			try {
-				// Check if Ollama is running
-				const ollamaRunning = await checkOllamaStatus();
-				if (!ollamaRunning) {
-					throw new Error('Ollama is not running. Please start it with: ollama serve');
-				}
-
-				console.log('Calling Ollama API...');
-				response = await callOllama(
+				console.log('Calling Claude API (Haiku 3.5)...');
+				response = await supabaseAPI.claude.call(
 					prompt,
 					'You are an expert educational content creator. Create clear, accurate study questions based on the provided material. Return ONLY valid JSON, no other text.',
-					'llama3.1:latest'
+					4096
 				);
-				console.log('Ollama response:', response);
+				console.log('Claude response:', response);
 				
 				// Parse the response
 				if (response.content && response.content[0]?.text) {
@@ -165,10 +159,11 @@ Return your response in this exact JSON format:
 						throw new Error('Could not find JSON in Claude response');
 					}
 				} else {
-					throw new Error('Invalid response from Ollama API');
+					throw new Error('Invalid response from Claude API');
 				}
-			} catch (ollamaError) {
-				console.error('Ollama API error:', ollamaError);
+			} catch (claudeError) {
+				const error = /** @type {Error} */ (claudeError);
+				console.error('Claude API error:', error);
 				console.warn('Falling back to sample questions...');
 				
 				// Fallback: Generate sample questions based on content
@@ -203,7 +198,7 @@ Return your response in this exact JSON format:
 					]
 				};
 				
-				alert('⚠️ Ollama API is not available. Generated sample questions instead.\n\nTo fix:\n1. Install Ollama: https://ollama.com\n2. Pull a model: ollama pull llama3.1\n3. Start Ollama: ollama serve');
+				alert('⚠️ Claude API failed. Generated sample questions instead.\n\nError: ' + error.message + '\n\nPlease check your API key at https://console.anthropic.com/');
 			}
 
 			// Create topics and problems

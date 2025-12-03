@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Ollama API client for local AI inference
  * Free alternative to Claude API

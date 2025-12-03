@@ -78,26 +78,39 @@ function createAuthStore() {
      * @param {string} password
      */
     login: async (email, password) => {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      console.log("Attempting login with Supabase...");
 
-      if (error) throw error;
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
 
-      if (data.session?.user) {
-        update((state) => ({
-          ...state,
-          isAuthenticated: true,
-          user: {
-            id: data.user.id,
-            email: data.user.email ?? undefined,
-          },
-          token: data.session.access_token,
-        }));
+        console.log("Login response:", { data, error });
+
+        if (error) {
+          console.error("Supabase login error:", error);
+          throw new Error(error.message || "Login failed");
+        }
+
+        if (data.session?.user) {
+          console.log("Login successful, updating state...");
+          update((state) => ({
+            ...state,
+            isAuthenticated: true,
+            user: {
+              id: data.user.id,
+              email: data.user.email ?? undefined,
+            },
+            token: data.session.access_token,
+          }));
+        }
+
+        return data;
+      } catch (err) {
+        console.error("Login error:", err);
+        throw err;
       }
-
-      return data;
     },
 
     /**

@@ -3,10 +3,36 @@
 	import { auth } from '$stores/auth-supabase';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
+	import { Toaster } from 'svelte-french-toast';
+	import { validateEnv } from '$lib/config';
+	import { logger } from '$lib/logger';
 	import '../app.css';
+
+	// Validate environment variables on app load
+	try {
+		validateEnv();
+	} catch (error) {
+		logger.error('Environment validation failed', error);
+	}
 
 	onMount(() => {
 		auth.init();
+		
+		// Initialize Sentry in production
+		if (import.meta.env.PROD && import.meta.env.VITE_SENTRY_DSN) {
+			import('@sentry/sveltekit').then(({ init }) => {
+				init({
+					dsn: import.meta.env.VITE_SENTRY_DSN,
+					environment: import.meta.env.MODE,
+					tracesSampleRate: 0.1,
+					replaysSessionSampleRate: 0.1,
+					replaysOnErrorSampleRate: 1.0
+				});
+				logger.info('Sentry initialized');
+			}).catch((err) => {
+				logger.error('Failed to initialize Sentry', err);
+			});
+		}
 	});
 
 	async function handleLogout() {
@@ -84,6 +110,9 @@
 			</div>
 		</div>
 	</nav>
+
+	<!-- Toast Notifications -->
+	<Toaster />
 
 	<!-- Main Content -->
 	<main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

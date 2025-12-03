@@ -12,10 +12,13 @@
 		loading = true;
 
 		try {
+			console.log('Login form submitted:', { email });
 			await auth.login(email, password);
+			console.log('Login successful, redirecting...');
 			// Redirect to dashboard
 			goto('/dashboard');
 		} catch (err) {
+			console.error('Login form error:', err);
 			error = err instanceof Error ? err.message : 'Login failed. Please check your credentials.';
 		} finally {
 			loading = false;

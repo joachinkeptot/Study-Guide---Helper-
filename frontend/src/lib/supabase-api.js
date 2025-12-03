@@ -272,6 +272,28 @@ export const practiceAPI = {
     } = await supabase.auth.getUser();
     if (!user) throw new Error("Not authenticated");
 
+    // Check if guide has any topics/problems
+    const { data: topics } = await supabase
+      .from("topics")
+      .select("id, problems:problems(count)")
+      .eq("study_guide_id", studyGuideId);
+
+    if (!topics || topics.length === 0) {
+      throw new Error(
+        "This study guide has no topics. Please generate topics first by clicking the 'Generate Topics' button."
+      );
+    }
+
+    const totalProblems = topics.reduce(
+      (sum, t) => sum + (t.problems?.[0]?.count || 0),
+      0
+    );
+    if (totalProblems === 0) {
+      throw new Error(
+        "This study guide has no practice problems. Please generate topics and problems first."
+      );
+    }
+
     const { data, error } = await supabase
       .from("practice_sessions")
       .insert({
@@ -477,12 +499,15 @@ export const claudeAPI = {
   },
 };
 
-// Export all APIs
-export default {
+// Export all APIs as default
+const supabaseAPI = {
   studyGuides: studyGuidesAPI,
   topics: topicsAPI,
   problems: problemsAPI,
   practice: practiceAPI,
   progress: progressAPI,
   claude: claudeAPI,
+  supabase: supabase,
 };
+
+export default supabaseAPI;
