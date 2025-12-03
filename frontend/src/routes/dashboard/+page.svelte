@@ -1,8 +1,8 @@
 <script>
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { auth } from '$stores/auth';
-	import api from '$lib/api';
+	import { auth } from '$stores/auth-supabase';
+	import api from '$lib/api.js';
 	import FileUpload from '$lib/components/FileUpload.svelte';
 	import GuideCard from '$lib/components/GuideCard.svelte';
 	import GuideDetail from '$lib/components/GuideDetail.svelte';

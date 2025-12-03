@@ -1,7 +1,6 @@
 <script>
 	import { goto } from '$app/navigation';
-	import { auth } from '$stores/auth';
-	import { authAPI } from '$lib/api';
+	import { auth } from '$stores/auth-supabase';
 
 	let email = '';
 	let password = '';
@@ -26,15 +25,7 @@
 		loading = true;
 
 		try {
-			const response = await authAPI.register(email, password);
-			
-			// Store token and user info
-			auth.login(response.token, {
-				id: response.user.id,
-				username: email.split('@')[0],
-				email: response.user.email
-			});
-
+			await auth.register(email, password);
 			// Redirect to dashboard
 			goto('/dashboard');
 		} catch (err) {

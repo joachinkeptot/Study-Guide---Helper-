@@ -1,12 +1,16 @@
 <script>
-	import { auth } from '$stores/auth';
+	import { onMount } from 'svelte';
+	import { auth } from '$stores/auth-supabase';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { authAPI } from '$lib/api';
 	import '../app.css';
 
+	onMount(() => {
+		auth.init();
+	});
+
 	async function handleLogout() {
-		await authAPI.logout();
+		await auth.logout();
 		goto('/login');
 	}
 </script>

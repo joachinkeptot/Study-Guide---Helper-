@@ -1,96 +1,21 @@
 version: "3.8"
 
 services:
-  # PostgreSQL Database
-  postgres:
-    image: postgres:15-alpine
-    container_name: studyguide-postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: studyguide
-      POSTGRES_PASSWORD: studyguide_dev_password
-      POSTGRES_DB: studyguide_db
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U studyguide"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # Backend API
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: studyguide-backend
-    restart: unless-stopped
-    environment:
-      FLASK_ENV: development
-      DATABASE_URL: postgresql://studyguide:studyguide_dev_password@postgres:5432/studyguide_db
-      SECRET_KEY: dev-secret-key-change-in-production
-      JWT_SECRET_KEY: dev-jwt-secret-key
-      CORS_ORIGINS: http://localhost:5173,http://localhost:3000
-      PORT: 5000
-    ports:
-      - "5000:5000"
-    volumes:
-      - ./backend:/app
-      - backend_venv:/app/venv
-    depends_on:
-      postgres:
-        condition: service_healthy
-    command: >
-      sh -c "
-        flask db upgrade &&
-        python run.py
-      "
-
-  # Frontend
+  # Frontend (now connects to Supabase instead of local backend)
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: studyguide-frontend
     restart: unless-stopped
-    environment:
-      PUBLIC_API_URL: http://localhost:5000
+    env_file:
+      - ./frontend/.env
     ports:
       - "5173:5173"
     volumes:
       - ./frontend:/app
       - /app/node_modules
-    depends_on:
-      - backend
     command: npm run dev -- --host 0.0.0.0
-
-  # pgAdmin (optional - for database management)
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: studyguide-pgadmin
-    restart: unless-stopped
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@studyguide.local
-      PGADMIN_DEFAULT_PASSWORD: admin
-      PGADMIN_CONFIG_SERVER_MODE: "False"
-    ports:
-      - "5050:80"
-    volumes:
-      - pgadmin_data:/var/lib/pgadmin
-    depends_on:
-      - postgres
-    profiles:
-      - tools
-
-volumes:
-  postgres_data:
-    driver: local
-  backend_venv:
-    driver: local
-  pgadmin_data:
-    driver: local
 
 networks:
   default:

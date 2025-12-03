@@ -1,6 +1,6 @@
 <script>
 	import { createEventDispatcher } from 'svelte';
-	import api from '$lib/api';
+	import api from '$lib/api.js';
 
 	/** @type {number} */
 	export let guideId;

@@ -2,8 +2,8 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { auth } from '$stores/auth';
-	import api from '$lib/api';
+	import { auth } from '$stores/auth-supabase';
+	import api from '$lib/supabase-api';
 	import AddTopicModal from '$lib/components/AddTopicModal.svelte';
 
 	/** @type {{ id: number; title: string; description?: string; content?: string; created_at: string; topic?: string; topics?: any[] } | null} */

@@ -1,8 +1,8 @@
 <script>
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { auth } from '$stores/auth';
-	import api from '$lib/api';
+	import { auth } from '$stores/auth-supabase';
+	import api from '$lib/api.js';
 	import LoadingSkeleton from '$lib/components/LoadingSkeleton.svelte';
 
 	/** @type {any} */

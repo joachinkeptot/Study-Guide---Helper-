@@ -2,8 +2,8 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { auth } from '$stores/auth';
-	import api from '$lib/api';
+	import { auth } from '$stores/auth-supabase';
+	import api from '$lib/api.js';
 	import PracticeSession from '$lib/components/PracticeSession.svelte';
 	import SessionSummary from '$lib/components/SessionSummary.svelte';
 
