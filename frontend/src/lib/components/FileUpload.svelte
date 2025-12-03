@@ -13,6 +13,7 @@
 	const ACCEPTED_TYPES = [
 		'application/pdf',
 		'text/plain',
+		'text/markdown',
 		'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 		'application/msword',
 		'image/png',
@@ -20,7 +21,7 @@
 		'image/jpg'
 	];
 
-	const ACCEPTED_EXTENSIONS = ['.pdf', '.txt', '.docx', '.doc', '.png', '.jpg', '.jpeg'];
+	const ACCEPTED_EXTENSIONS = ['.pdf', '.txt', '.md', '.docx', '.doc', '.png', '.jpg', '.jpeg'];
 
 	/**
 	 * @param {File} file
@@ -102,17 +103,27 @@
 				}
 			}, 200);
 
-			dispatch('upload', { file: selectedFile, formData });
-
-			clearInterval(progressInterval);
-			uploadProgress = 100;
-
-			// Reset after success
-			setTimeout(() => {
-				selectedFile = null;
-				isUploading = false;
-				uploadProgress = 0;
-			}, 1000);
+			// Dispatch upload event and wait for parent to handle it
+			dispatch('upload', { 
+				file: selectedFile, 
+				formData,
+				onSuccess: () => {
+					clearInterval(progressInterval);
+					uploadProgress = 100;
+					// Reset after success
+					setTimeout(() => {
+						selectedFile = null;
+						isUploading = false;
+						uploadProgress = 0;
+					}, 1000);
+				},
+				onError: (/** @type {string} */ errorMsg) => {
+					clearInterval(progressInterval);
+					error = errorMsg;
+					isUploading = false;
+					uploadProgress = 0;
+				}
+			});
 
 		} catch (err) {
 			error = (/** @type {Error} */ (err)).message || 'Upload failed. Please try again.';
@@ -152,7 +163,7 @@
 					</p>
 				</div>
 				<div class="text-xs text-gray-400">
-					Supports: PDF, TXT, DOCX, PNG, JPG (max 10MB)
+					Supports: PDF, TXT, MD, DOCX, PNG, JPG (max 10MB)
 				</div>
 				<input
 					type="file"

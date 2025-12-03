@@ -9,3 +9,5 @@ api_bp = Blueprint('api', __name__)
 
 # Import routes to register them with the blueprint
 from app.routes import auth, study_guides, practice, progress
+from app.routes.claude import claude_bp
+api_bp.register_blueprint(claude_bp)

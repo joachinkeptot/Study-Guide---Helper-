@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { auth } from '$stores/auth';
 	import api from '$lib/api';
+	import LoadingSkeleton from '$lib/components/LoadingSkeleton.svelte';
 
 	/** @type {any} */
 	let progress = null;
@@ -20,10 +21,13 @@
 		if (!$auth.isAuthenticated) return;
 
 		try {
-			const overviewData = await api.get('/api/progress/overview');
-			progress = overviewData.overview || {};
+			// Load both in parallel for better performance
+			const [overviewData, historyData] = await Promise.all([
+				api.get('/api/progress/overview'),
+				api.get('/api/progress/history?limit=10')
+			]);
 			
-			const historyData = await api.get('/api/progress/history');
+			progress = overviewData.overview || {};
 			sessions = historyData.history || [];
 		} catch (err) {
 			error = (/** @type {Error} */ (err)).message || 'Failed to load progress data';
@@ -62,8 +66,9 @@
 		{/if}
 
 		{#if loading}
-			<div class="flex justify-center items-center py-12">
-				<div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+			<div class="space-y-6">
+				<LoadingSkeleton type="card" count={3} />
+				<LoadingSkeleton type="list" count={5} />
 			</div>
 		{:else}
 			<!-- Overall Statistics -->

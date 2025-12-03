@@ -37,18 +37,25 @@
 	async function startPractice() {
 		if (!guideId) return;
 		
+		// Check if there are topics before starting
+		if (!guide || !guide.topics || guide.topics.length === 0) {
+			error = 'This study guide has no topics yet. Please add topics before starting practice.';
+			return;
+		}
+		
 		startingPractice = true;
+		error = ''; // Clear any previous errors
 		try {
 			const response = await api.post('/api/practice/start', {
 				guide_id: parseInt(guideId)
 			});
 			const sessionData = response.session || response;
+			// Navigate immediately - problems will load in practice view
 			goto(`/practice/${sessionData.id}`);
 		} catch (err) {
 			const errorMessage = err instanceof Error ? err.message : 'Failed to start practice session';
 			error = errorMessage;
-		} finally {
-			startingPractice = false;
+			startingPractice = false; // Only reset on error
 		}
 	}
 

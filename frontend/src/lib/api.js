@@ -1,3 +1,15 @@
+// Import axios for making HTTP requests
+import axios from "axios";
+
+export async function callClaude(prompt) {
+  try {
+    const response = await axios.post("/api/claude", { prompt });
+    return response.data;
+  } catch (error) {
+    console.error("Claude API error:", error);
+    throw error;
+  }
+}
 // @ts-check
 import { browser } from "$app/environment";
 import { goto } from "$app/navigation";

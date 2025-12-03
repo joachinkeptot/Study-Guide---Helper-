@@ -19,30 +19,34 @@ from app.routes.auth import token_required
 def get_progress_overview(current_user):
     """
     Get overall progress statistics for the user.
+    Optimized to use fewer queries for better performance.
     """
     try:
+        # Get all counts in a single efficient query
+        from datetime import datetime, timedelta
+        
         # Total study guides
         total_guides = StudyGuide.query.filter_by(user_id=current_user.id).count()
         
-        # Total practice sessions
-        total_sessions = PracticeSession.query.filter_by(user_id=current_user.id).count()
+        # Session stats (combine queries)
+        session_stats = db.session.query(
+            func.count(PracticeSession.id).label('total'),
+            func.sum(func.cast(PracticeSession.ended_at.isnot(None), db.Integer)).label('completed')
+        ).filter(PracticeSession.user_id == current_user.id).first()
         
-        # Completed sessions
-        completed_sessions = PracticeSession.query.filter(
-            PracticeSession.user_id == current_user.id,
-            PracticeSession.ended_at.isnot(None)
-        ).count()
+        total_sessions = session_stats.total or 0
+        completed_sessions = session_stats.completed or 0
         
-        # Total problems attempted
-        total_attempts = ProblemAttempt.query.join(PracticeSession).filter(
+        # Problem attempt stats (combine queries)
+        attempt_stats = db.session.query(
+            func.count(ProblemAttempt.id).label('total'),
+            func.sum(func.cast(ProblemAttempt.is_correct, db.Integer)).label('correct')
+        ).join(PracticeSession).filter(
             PracticeSession.user_id == current_user.id
-        ).count()
+        ).first()
         
-        # Total correct answers
-        correct_attempts = ProblemAttempt.query.join(PracticeSession).filter(
-            PracticeSession.user_id == current_user.id,
-            ProblemAttempt.is_correct == True
-        ).count()
+        total_attempts = attempt_stats.total or 0
+        correct_attempts = attempt_stats.correct or 0
         
         # Overall accuracy
         overall_accuracy = round(correct_attempts / total_attempts * 100, 2) if total_attempts > 0 else 0

@@ -7,12 +7,30 @@
 	import PracticeSession from '$lib/components/PracticeSession.svelte';
 	import SessionSummary from '$lib/components/SessionSummary.svelte';
 
-	/** @type {any} */
+import { callClaude } from '$lib/api.js';
+
+let prompt = '';
+let response = '';
+let loading = false;
+let error = '';
+
+async function sendPrompt() {
+	loading = true;
+	error = '';
+	response = '';
+	try {
+		const result = await callClaude(prompt);
+		response = result?.content || JSON.stringify(result);
+	} catch (e) {
+		error = e instanceof Error ? (e.message || 'Error calling Claude API') : 'Error calling Claude API';
+	} finally {
+		loading = false;
+	}
+}
+	/** @type {{ id?: number, study_guide?: any, topic?: any } | null} */
 	let session = null;
 	/** @type {any} */
 	let currentProblem = null;
-	let loading = true;
-	let error = '';
 	/** @type {any} */
 	let sessionSummary = null;
 
@@ -58,6 +76,12 @@
 	async function loadNextProblem() {
 		try {
 			const response = await api.get(`/api/practice/next-problem?session_id=${sessionId}`);
+			if (!response || !response.problem) {
+				// Guard against empty 200 responses
+				error = 'No problem returned from server. Please try again or end the session.';
+				currentProblem = null;
+				return;
+			}
 			currentProblem = response.problem;
 			currentProblemIndex++;
 
@@ -65,10 +89,16 @@
 				practiceSessionComponent.showProblem(currentProblem);
 			}
 		} catch (err) {
-			const errorMsg = (/** @type {Error} */ (err)).message;
+			const errorMsg = err instanceof Error ? err.message : 'Failed to load next problem';
 			// If there are no problems available for selected topics, show a friendly empty state
-			if (errorMsg && errorMsg.includes('No problems available')) {
-				error = 'No practice problems are available for this study guide/topics yet. Try selecting a different guide or add problems.';
+			if (errorMsg && (errorMsg.includes('No problems available') || errorMsg.includes('No topics found'))) {
+				error = 'No practice problems are available for this study guide yet. This can happen if the document content is too short or if problem generation failed. Please try uploading a different document or contact support.';
+				currentProblem = null;
+				return;
+			}
+			// If problem generation failed
+			if (errorMsg && errorMsg.includes('Failed to generate')) {
+				error = 'We encountered an issue generating practice problems. Please try again in a moment, or return to the dashboard to upload a different document.';
 				currentProblem = null;
 				return;
 			}
@@ -92,7 +122,7 @@
 			}
 			const response = await api.post('/api/practice/end', { session_id: parseInt(sessionId) });
 			sessionSummary = response.summary;
-		} catch {
+		} catch (err) {
 			// Fallback summary if endpoint fails
 			sessionSummary = {
 				total_problems: currentProblemIndex,
@@ -127,7 +157,8 @@
 				});
 			}
 		} catch (err) {
-			error = (/** @type {Error} */ (err)).message || 'Failed to submit answer';
+			const msg = err instanceof Error ? err.message : 'Failed to submit answer';
+			error = msg;
 		}
 	}
 
@@ -153,7 +184,7 @@
 				throw new Error('No hints available for this problem');
 			}
 		} catch (err) {
-			const errorMsg = (/** @type {Error} */ (err)).message;
+			const errorMsg = err instanceof Error ? err.message : 'Failed to load hint';
 			// Show user-friendly error messages
 			if (errorMsg.includes('All hints have been used')) {
 				alert('All hints for this problem have been used.');
@@ -216,17 +247,41 @@
 			</div>
 		</div>
 	{:else if error && !currentProblem}
-		<div class="min-h-screen flex items-center justify-center p-4">
-			<div class="max-w-md w-full">
-				<div class="rounded-md bg-red-50 border border-red-200 p-4 mb-4">
-					<p class="text-sm text-red-800">{error}</p>
+		<div class="min-h-screen flex items-center justify-center p-4 bg-gray-50">
+			<div class="max-w-lg w-full">
+				<div class="bg-white rounded-lg shadow-md border border-gray-200 p-8">
+					<div class="flex items-start gap-4 mb-6">
+						<div class="shrink-0">
+							<svg class="h-12 w-12 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+							</svg>
+						</div>
+						<div class="flex-1">
+							<h2 class="text-xl font-semibold text-gray-900 mb-2">Unable to Start Practice Session</h2>
+							<p class="text-sm text-gray-700 leading-relaxed">{error}</p>
+						</div>
+					</div>
+					
+					<div class="flex flex-col sm:flex-row gap-3">
+						<button
+							on:click={loadSession}
+							class="flex-1 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md 
+								hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 
+								focus:ring-offset-2 transition-colors"
+						>
+							🔄 Try Again
+						</button>
+						<a 
+							href="/dashboard" 
+							class="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 
+								bg-gray-100 text-gray-700 text-sm font-medium rounded-md 
+								hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 
+								focus:ring-offset-2 transition-colors"
+						>
+							← Back to Dashboard
+						</a>
+					</div>
 				</div>
-				<a 
-					href="/dashboard" 
-					class="inline-flex items-center gap-2 text-indigo-600 hover:text-indigo-700 font-medium"
-				>
-					← Back to Dashboard
-				</a>
 			</div>
 		</div>
 	{:else if sessionSummary}

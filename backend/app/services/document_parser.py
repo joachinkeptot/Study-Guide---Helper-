@@ -363,8 +363,13 @@ class DocumentParser:
         """
         if self.llm_provider is None:
             # Import here to avoid circular dependency
-            from app.services.llm_adapter import get_default_provider
-            self.llm_provider = get_default_provider()
+            try:
+                from app.services.llm_adapter import get_default_provider
+                self.llm_provider = get_default_provider()
+            except Exception as e:
+                # If no provider or API key configured, gracefully fall back
+                logger.warning(f"LLM provider unavailable, using heuristic extraction: {e}")
+                return self._extract_basic_structure(text)
         
         # Truncate text if too long (keep first 15000 chars for better LLM processing)
         if len(text) > 15000:

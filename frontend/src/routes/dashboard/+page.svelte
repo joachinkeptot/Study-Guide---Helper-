@@ -6,6 +6,7 @@
 	import FileUpload from '$lib/components/FileUpload.svelte';
 	import GuideCard from '$lib/components/GuideCard.svelte';
 	import GuideDetail from '$lib/components/GuideDetail.svelte';
+	import LoadingSkeleton from '$lib/components/LoadingSkeleton.svelte';
 
 	/** @type {any[]} */
 	let guides = [];
@@ -23,14 +24,16 @@
 
 	onMount(async () => {
 		if (!$auth.isAuthenticated) return;
-		await loadGuides();
+		// Start loading guides immediately
+		loadGuides();
 	});
 
 	async function loadGuides() {
 		loading = true;
 		loadError = '';
 		try {
-			const data = await api.get('/api/guides');
+			// Use pagination to load faster
+			const data = await api.get('/api/guides?limit=50');
 			guides = data.guides || [];
 		} catch (err) {
 			loadError = (/** @type {Error} */ (err)).message || 'Failed to load study guides';
@@ -40,11 +43,11 @@
 	}
 
 	/**
-	 * @param {CustomEvent<{ file: File; formData: FormData }>} event
+	 * @param {CustomEvent<{ file: File; formData: FormData; onSuccess: () => void; onError: (msg: string) => void }>} event
 	 */
 	async function handleUpload(event) {
 		uploadError = '';
-		const { formData } = event.detail;
+		const { formData, onSuccess, onError } = event.detail;
 
 		try {
 			// Call your API endpoint for file upload
@@ -61,14 +64,19 @@
 
 			if (!response.ok) {
 				const errorData = await response.json().catch(() => ({}));
-				throw new Error(errorData.message || 'Upload failed');
+				const errorMsg = errorData.error || errorData.message || 'Upload failed';
+				uploadError = errorMsg;
+				onError(errorMsg);
+				return;
 			}
 
 			// Reload guides after successful upload
 			await loadGuides();
+			onSuccess();
 		} catch (err) {
-			uploadError = (/** @type {Error} */ (err)).message || 'Upload failed. Please try again.';
-			throw err;
+			const errorMsg = (/** @type {Error} */ (err)).message || 'Upload failed. Please try again.';
+			uploadError = errorMsg;
+			onError(errorMsg);
 		}
 	}
 
@@ -85,7 +93,21 @@
 			const sessionData = response.session || response;
 			goto(`/practice/${sessionData.id}`);
 		} catch (err) {
-			alert((/** @type {Error} */ (err)).message || 'Failed to start practice session');
+			const errorMsg = (/** @type {Error} */ (err)).message || 'Failed to start practice session';
+			// Show error in a more user-friendly way
+			if (confirm(`${errorMsg}\n\nWould you like to view the guide details to check for topics and problems?`)) {
+				selectedGuideId = guideId;
+				loadingDetail = true;
+				try {
+					const guideData = await api.get(`/api/guides/${guideId}`);
+					selectedGuide = guideData.guide || guideData;
+				} catch {
+					alert('Failed to load guide details');
+					selectedGuideId = null;
+				} finally {
+					loadingDetail = false;
+				}
+			}
 		}
 	}
 
@@ -185,10 +207,8 @@
 						</div>
 					{/if}
 
-					{#if loading}
-						<div class="flex justify-center items-center py-12">
-							<div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-						</div>
+				{#if loading}
+					<LoadingSkeleton type="card" count={3} />
 					{:else if guides.length === 0}
 						<!-- Empty State -->
 						<div class="text-center py-16 bg-white rounded-lg shadow-sm border border-gray-200">
