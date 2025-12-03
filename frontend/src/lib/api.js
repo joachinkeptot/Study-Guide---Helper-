@@ -1,6 +1,9 @@
 // Import axios for making HTTP requests
 import axios from "axios";
 
+/**
+ * @param {string} prompt
+ */
 export async function callClaude(prompt) {
   try {
     const response = await axios.post("/api/claude", { prompt });

@@ -7,26 +7,8 @@
 	import PracticeSession from '$lib/components/PracticeSession.svelte';
 	import SessionSummary from '$lib/components/SessionSummary.svelte';
 
-import { callClaude } from '$lib/api.js';
-
-let prompt = '';
-let response = '';
 let loading = false;
 let error = '';
-
-async function sendPrompt() {
-	loading = true;
-	error = '';
-	response = '';
-	try {
-		const result = await callClaude(prompt);
-		response = result?.content || JSON.stringify(result);
-	} catch (e) {
-		error = e instanceof Error ? (e.message || 'Error calling Claude API') : 'Error calling Claude API';
-	} finally {
-		loading = false;
-	}
-}
 	/** @type {{ id?: number, study_guide?: any, topic?: any } | null} */
 	let session = null;
 	/** @type {any} */
@@ -88,8 +70,8 @@ async function sendPrompt() {
 			if (practiceSessionComponent) {
 				practiceSessionComponent.showProblem(currentProblem);
 			}
-		} catch (err) {
-			const errorMsg = err instanceof Error ? err.message : 'Failed to load next problem';
+		} catch (e) {
+			const errorMsg = e instanceof Error ? e.message : 'Failed to load next problem';
 			// If there are no problems available for selected topics, show a friendly empty state
 			if (errorMsg && (errorMsg.includes('No problems available') || errorMsg.includes('No topics found'))) {
 				error = 'No practice problems are available for this study guide yet. This can happen if the document content is too short or if problem generation failed. Please try uploading a different document or contact support.';
@@ -120,11 +102,11 @@ async function sendPrompt() {
 				error = 'Session ID is missing.';
 				return;
 			}
-			const response = await api.post('/api/practice/end', { session_id: parseInt(sessionId) });
-			sessionSummary = response.summary;
-		} catch (err) {
-			// Fallback summary if endpoint fails
-			sessionSummary = {
+		const response = await api.post('/api/practice/end', { session_id: parseInt(sessionId) });
+		sessionSummary = response.summary;
+	} catch {
+		// Fallback summary if endpoint fails
+		sessionSummary = {
 				total_problems: currentProblemIndex,
 				correct_answers: 0,
 				accuracy: 0
@@ -156,8 +138,8 @@ async function sendPrompt() {
 					hints_used: hintsUsed
 				});
 			}
-		} catch (err) {
-			const msg = err instanceof Error ? err.message : 'Failed to submit answer';
+		} catch (e) {
+			const msg = e instanceof Error ? e.message : 'Failed to submit answer';
 			error = msg;
 		}
 	}
@@ -218,8 +200,8 @@ async function sendPrompt() {
 			}
 			await api.post('/api/practice/end', { session_id: parseInt(sessionId) });
 			await loadSessionSummary();
-		} catch (err) {
-			error = (/** @type {Error} */ (err)).message || 'Failed to end session';
+		} catch (e) {
+			error = (/** @type {Error} */ (e)).message || 'Failed to end session';
 		}
 	}
 
