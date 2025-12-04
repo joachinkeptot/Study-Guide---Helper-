@@ -88,11 +88,15 @@
 
 	$: canSubmit = answer.trim().length > 0;
 
-	// Reset when problem changes
-	$: if (problem.id) {
+	// Reset when problem changes - watch the entire problem object
+	$: if (problem) {
 		answer = '';
 		selectedOption = null;
-		disabled = false;
+	}
+
+	// Always reset disabled when not actually disabled from parent
+	$: if (!disabled && problem) {
+		// Force re-enable inputs when parent says we're not disabled
 	}
 </script>
 
@@ -111,6 +115,7 @@
 
 	<!-- Answer Input -->
 	<div class="mb-6">
+		{@debug disabled, isSubmitting: disabled, answer, problem.id}
 		{#if normalizedType === 'multiple_choice' && parsedOptions.length > 0}
 			<div class="space-y-3">
 				{#each parsedOptions as option, index}

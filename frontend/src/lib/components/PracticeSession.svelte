@@ -91,15 +91,15 @@
 	 */
 	export function showProblem(problem) {
 		console.log('PracticeSession.showProblem called with:', problem);
-		currentProblem = problem;
-		currentFeedback = null;
-		state = 'question';
+		// Reset all state before showing new problem
 		isSubmitting = false;
 		isLoadingNext = false;
-		console.log('Set isSubmitting and isLoadingNext to false, state:', state);
-		if (!currentProblem || currentProblem.id !== problem.id) {
-			revealedHints = [];
-		}
+		state = 'question';
+		currentFeedback = null;
+		revealedHints = [];
+		// Set current problem last to trigger reactive updates
+		currentProblem = problem;
+		console.log('Reset complete, showing new problem');
 	}
 
 	/**
