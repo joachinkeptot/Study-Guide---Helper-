@@ -80,12 +80,21 @@ function validateAndNormalizeProblem(data: any, numOptions: number): { valid: bo
 }
 
 function normalizeSinglePart(data: any, numOptions: number): any {
-  const options = Array.isArray(data.options) 
+  let options = Array.isArray(data.options) 
     ? data.options.map((o: any) => String(o).trim()).filter((o: string) => o.length > 0)
     : []
 
   if (options.length < 2) {
     throw new Error('Must have at least 2 options')
+  }
+
+  // Ensure we have exactly numOptions options
+  if (options.length > numOptions) {
+    // Trim excess options (keep first numOptions)
+    options = options.slice(0, numOptions)
+  } else if (options.length < numOptions) {
+    // This shouldn't happen often, but pad if needed
+    console.warn(`Only ${options.length} options provided, expected ${numOptions}`)
   }
 
   // Find the correct answer in options (case-insensitive match, then use exact option text)
@@ -123,12 +132,19 @@ function normalizeSinglePart(data: any, numOptions: number): any {
 
 function normalizeMultiPart(data: any, numOptions: number): any {
   const parts = data.parts.map((part: any, index: number) => {
-    const options = Array.isArray(part.options)
+    let options = Array.isArray(part.options)
       ? part.options.map((o: any) => String(o).trim()).filter((o: string) => o.length > 0)
       : []
 
     if (options.length < 2) {
       throw new Error(`Part ${index + 1} must have at least 2 options`)
+    }
+
+    // Ensure we have exactly numOptions options
+    if (options.length > numOptions) {
+      options = options.slice(0, numOptions)
+    } else if (options.length < numOptions) {
+      console.warn(`Part ${index + 1}: Only ${options.length} options, expected ${numOptions}`)
     }
 
     // Find correct answer in options
@@ -198,69 +214,97 @@ function buildPrompt(body: RequestBody): string {
   let visualInstructions = ''
   if (includeVisuals) {
     visualInstructions = `
-Include a "visual" field when appropriate:
+VISUALS: Include a "visual" field with relevant content:
 {
   "visual": {
     "type": "equation|code|table|diagram",
-    "content": "The actual content (LaTeX for equations, code for programming, etc.)",
-    "description": "What this visual represents"
+    "content": "LaTeX, code, markdown table, or ASCII diagram",
+    "description": "Brief description"
   }
 }
-- For math: Use LaTeX (e.g., "\\\\frac{d}{dx}(x^2) = 2x")
-- For code: Use the appropriate language
-- For tables: Use markdown table format
-`
+For math topics, ALWAYS include equations in LaTeX format.`
   }
 
-  const structureExample = preferMultiPart ? `
+  // Generate option placeholders
+  const optionPlaceholders = Array.from({ length: numOptions }, (_, i) => 
+    `"Option ${String.fromCharCode(65 + i)}"`
+  ).join(', ')
+
+  let prompt: string
+
+  if (preferMultiPart) {
+    // MULTI-PART QUESTION - be very explicit
+    prompt = `Create a MULTI-PART question (2-3 connected parts) about: ${topic}
+
+STRICT REQUIREMENTS:
+- Difficulty: ${difficultyGuide[difficulty]}
+- Depth: ${depthGuide[conceptualDepth]}  
+- Style: ${styleGuide[problemStyle]}
+- Each part MUST have EXACTLY ${numOptions} options (not more, not less)
+- correct_answer MUST be copied EXACTLY from the options array
+${visualInstructions}
+
+You MUST return a multi-part question with this EXACT structure:
+
 {
-  "question": "Consider the following scenario about ${topic}:",
+  "question": "A scenario or stem that connects the parts",
   "parts": [
     {
-      "prompt": "Part A: First aspect of the problem",
-      "options": [${Array(numOptions).fill('"Option"').join(', ')}],
-      "correct_answer": "The exact text of the correct option",
+      "prompt": "Part A question",
+      "options": [${optionPlaceholders}],
+      "correct_answer": "EXACT copy of correct option",
       "explanation": "Why this is correct"
     },
     {
-      "prompt": "Part B: Second aspect",
-      "options": [${Array(numOptions).fill('"Option"').join(', ')}],
-      "correct_answer": "The exact text of the correct option", 
+      "prompt": "Part B question (related to Part A)",
+      "options": [${optionPlaceholders}],
+      "correct_answer": "EXACT copy of correct option",
       "explanation": "Why this is correct"
     }
   ],
   "tags": ["concept1", "concept2"]
-}` : `
-{
-  "question": "A clear, specific question about ${topic}",
-  "options": [${Array(numOptions).fill('"Distinct option"').join(', ')}],
-  "correct_answer": "Must exactly match one option above",
-  "explanation": "2-3 sentences explaining why this is correct",
-  "tags": ["concept1", "concept2"]
-}`
+}
 
-  let prompt = `Generate a ${difficulty} difficulty multiple-choice question about: ${topic}
+CRITICAL RULES:
+1. You MUST create 2-3 parts in the "parts" array
+2. Each part MUST have exactly ${numOptions} options
+3. Parts should be related but independently answerable
+4. Do NOT create a single-question format - use the parts array
 
-REQUIREMENTS:
+Return ONLY the JSON, no other text.`
+  } else {
+    // SINGLE-PART QUESTION
+    prompt = `Create a single multiple-choice question about: ${topic}
+
+STRICT REQUIREMENTS:
 - Difficulty: ${difficultyGuide[difficulty]}
 - Depth: ${depthGuide[conceptualDepth]}
 - Style: ${styleGuide[problemStyle]}
-- Exactly ${numOptions} answer options
-- correct_answer MUST be the EXACT text of one option (copy-paste it)
-- Make distractors plausible but clearly wrong upon analysis
+- EXACTLY ${numOptions} options (not more, not less)
+- correct_answer MUST be copied EXACTLY from the options array
 ${visualInstructions}
 
-Return ONLY valid JSON (no markdown, no explanation outside JSON):
-${structureExample}
+Return this EXACT JSON structure:
 
-CRITICAL: The correct_answer field must contain the COMPLETE, EXACT text of the correct option.`
+{
+  "question": "Your question here",
+  "options": [${optionPlaceholders}],
+  "correct_answer": "EXACT copy of the correct option from above",
+  "explanation": "2-3 sentences explaining why",
+  "tags": ["concept1", "concept2"]
+}
+
+CRITICAL: The options array must have exactly ${numOptions} items. Count them!
+
+Return ONLY the JSON, no other text.`
+  }
 
   if (recentProblems.length > 0) {
-    prompt += `\n\nAVOID these recently asked concepts:\n`
+    prompt += `\n\nAVOID similar questions to these recent ones:\n`
     recentProblems.slice(0, 5).forEach((p, i) => {
-      prompt += `${i + 1}. ${p.substring(0, 200)}...\n`
+      prompt += `- ${p.substring(0, 150)}...\n`
     })
-    prompt += `\nGenerate a question testing a DIFFERENT aspect of ${topic}.`
+    prompt += `\nTest a DIFFERENT concept or approach.`
   }
 
   return prompt
