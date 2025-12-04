@@ -115,7 +115,7 @@
 
 	<!-- Answer Input -->
 	<div class="mb-6">
-		{@debug disabled, isSubmitting: disabled, answer, problem.id}
+		{@debug disabled, answer, problem.id}
 		{#if normalizedType === 'multiple_choice' && parsedOptions.length > 0}
 			<div class="space-y-3">
 				{#each parsedOptions as option, index}
