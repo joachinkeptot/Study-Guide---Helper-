@@ -1,5 +1,4 @@
 <script>
-	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
 	import { auth } from '$stores/auth-supabase';

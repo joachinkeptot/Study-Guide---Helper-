@@ -15,8 +15,8 @@
 			console.log('Login form submitted:', { email });
 			await auth.login(email, password);
 			console.log('Login successful, redirecting...');
-			// Redirect to dashboard
-			goto('/dashboard');
+			// Redirect to simple practice
+			goto('/simple-practice');
 		} catch (err) {
 			console.error('Login form error:', err);
 			error = err instanceof Error ? err.message : 'Login failed. Please check your credentials.';

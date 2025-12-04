@@ -36,8 +36,8 @@
 				needsEmailConfirmation = true;
 				success = true;
 			} else if (result.session) {
-				// Auto-logged in, redirect to dashboard
-				goto('/dashboard');
+				// Auto-logged in, redirect to simple practice
+				goto('/simple-practice');
 			}
 		} catch (err) {
 			console.error('Registration error:', err);
