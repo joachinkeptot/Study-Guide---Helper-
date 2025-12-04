@@ -3,10 +3,10 @@
 	import { goto } from '$app/navigation';
 	import { auth } from '$stores/auth-supabase';
 
-	// Redirect to dashboard if already logged in
+	// Redirect to simple-practice if already logged in
 	onMount(() => {
 		if ($auth.isAuthenticated) {
-			goto('/dashboard');
+			goto('/simple-practice');
 		}
 	});
 </script>
@@ -14,11 +14,10 @@
 <div class="flex flex-col items-center justify-center min-h-[calc(100vh-12rem)]">
 	<div class="text-center max-w-3xl">
 		<h1 class="text-5xl font-bold text-gray-900 mb-6">
-			Welcome to Study Helper
+			AI Study Practice
 		</h1>
 		<p class="text-xl text-gray-600 mb-8">
-			Transform your study materials into interactive practice sessions. 
-			Upload documents, generate study guides, and track your progress.
+			Enter any topic and get instant AI-generated practice problems with explanations.
 		</p>
 		
 		<div class="flex flex-col sm:flex-row gap-4 justify-center">
@@ -42,19 +41,19 @@
 
 		<div class="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8">
 			<div class="p-6 bg-white rounded-lg shadow-sm border border-gray-200">
-				<div class="text-3xl mb-3">📚</div>
-				<h3 class="text-lg font-semibold text-gray-900 mb-2">Upload Materials</h3>
-				<p class="text-gray-600">Upload your study documents and let AI generate comprehensive study guides.</p>
+				<div class="text-3xl mb-3">🤖</div>
+				<h3 class="text-lg font-semibold text-gray-900 mb-2">AI Generated</h3>
+				<p class="text-gray-600">Get instant practice problems on any topic you want to study.</p>
 			</div>
 			<div class="p-6 bg-white rounded-lg shadow-sm border border-gray-200">
-				<div class="text-3xl mb-3">✍️</div>
-				<h3 class="text-lg font-semibold text-gray-900 mb-2">Practice</h3>
-				<p class="text-gray-600">Test your knowledge with interactive practice sessions and instant feedback.</p>
+				<div class="text-3xl mb-3">✓</div>
+				<h3 class="text-lg font-semibold text-gray-900 mb-2">Instant Feedback</h3>
+				<p class="text-gray-600">Get immediate explanations for every answer - right or wrong.</p>
 			</div>
 			<div class="p-6 bg-white rounded-lg shadow-sm border border-gray-200">
-				<div class="text-3xl mb-3">📊</div>
-				<h3 class="text-lg font-semibold text-gray-900 mb-2">Track Progress</h3>
-				<p class="text-gray-600">Monitor your learning journey with detailed progress analytics.</p>
+				<div class="text-3xl mb-3">♾️</div>
+				<h3 class="text-lg font-semibold text-gray-900 mb-2">Unlimited Practice</h3>
+				<p class="text-gray-600">Practice as much as you need until you feel confident.</p>
 			</div>
 		</div>
 	</div>
