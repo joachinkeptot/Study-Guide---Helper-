@@ -129,8 +129,8 @@
 					placeholder="Type your answer..."
 					class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg
 						focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2
-						disabled:opacity-60 disabled:cursor-not-allowed
-						transition-all text-gray-900 placeholder-gray-400"
+						transition-all text-gray-900 placeholder-gray-400
+						disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-gray-50"
 				/>
 				<p class="text-xs text-gray-500 mt-2">💡 Tip: Press Enter to submit</p>
 			</div>
@@ -144,8 +144,8 @@
 					rows="6"
 					class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg resize-y
 						focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2
-						disabled:opacity-60 disabled:cursor-not-allowed
-						transition-all text-gray-900 placeholder-gray-400"
+						transition-all text-gray-900 placeholder-gray-400
+						disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-gray-50"
 				></textarea>
 				<p class="text-xs text-gray-500 mt-2">💡 Tip: Use Shift+Enter for new lines</p>
 			</div>
@@ -158,8 +158,8 @@
 					placeholder="Type your answer..."
 					class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg
 						focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2
-						disabled:opacity-60 disabled:cursor-not-allowed
-						transition-all text-gray-900 placeholder-gray-400"
+						transition-all text-gray-900 placeholder-gray-400
+						disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-gray-50"
 				/>
 				<p class="text-xs text-gray-500 mt-2">Unknown problem type; using short answer.</p>
 			</div>

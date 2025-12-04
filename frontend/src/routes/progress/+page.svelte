@@ -2,11 +2,11 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { auth } from '$stores/auth-supabase';
-	import api from '$lib/api.js';
+	import supabaseAPI from '$lib/supabase-api.js';
 	import LoadingSkeleton from '$lib/components/LoadingSkeleton.svelte';
 
 	/** @type {any} */
-	let progress = null;
+	let progress = { total_practice_sessions: 0, total_problems_attempted: 0, overall_accuracy: 0 };
 	/** @type {any[]} */
 	let sessions = [];
 	let loading = true;
@@ -21,14 +21,33 @@
 		if (!$auth.isAuthenticated) return;
 
 		try {
-			// Load both in parallel for better performance
-			const [overviewData, historyData] = await Promise.all([
-				api.get('/api/progress/overview'),
-				api.get('/api/progress/history?limit=10')
-			]);
-			
-			progress = overviewData.overview || {};
-			sessions = historyData.history || [];
+			// Fetch sessions via Supabase and compute overview locally
+			const allSessions = await supabaseAPI.progress.getSessions();
+			sessions = (allSessions || []).map(s => ({
+				id: s.id,
+				guide: s.study_guide,
+				started_at: s.started_at,
+				ended_at: s.ended_at,
+				stats: s.attempts?.[0] ? {
+					total_problems: s.attempts[0].count || 0,
+					correct_answers: undefined,
+					accuracy: undefined
+				} : {
+					total_problems: 0,
+					correct_answers: 0,
+					accuracy: 0
+				}
+			}));
+
+			// Compute overview: total sessions and total problems attempted
+			const totalSessions = sessions.length;
+			const totalAttempted = sessions.reduce((sum, s) => sum + (s.stats?.total_problems || 0), 0);
+			// Accuracy requires fetching attempts per session; approximate as 0 unless we enrich later
+			progress = {
+				total_practice_sessions: totalSessions,
+				total_problems_attempted: totalAttempted,
+				overall_accuracy: 0
+			};
 		} catch (err) {
 			error = (/** @type {Error} */ (err)).message || 'Failed to load progress data';
 		} finally {

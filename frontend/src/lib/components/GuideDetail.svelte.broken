@@ -220,86 +220,151 @@
 					on:selectMode={handleModeSelect}
 				/>
 			{:else}
-				<!-- Topics Section -->
-				<div>
-					<div class="flex items-center justify-between mb-4">
-						<h3 class="text-lg font-semibold text-gray-900">Topics</h3>
-						<label class="flex items-center gap-2 cursor-pointer">
-							<input
-								type="checkbox"
-								checked={selectAll}
-								on:change={toggleSelectAll}
-								class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
-							/>
-							<span class="text-sm text-gray-700">Select all</span>
-						</label>
-					</div>
+			<!-- Topics Section -->
+			<div>g = '';
+		} catch (err) {
+			console.error('Error adding tag:', err);
+			alert('Failed to add tag');
+		} finally {
+			addingTag = false;
+		}
+	}
 
-					{#if topics.length === 0}
-						<div class="text-center py-8 text-gray-500">
-							<div class="text-4xl mb-2">📝</div>
-							<p>No topics found for this guide</p>
-						</div>
-					{:else}
-						<div class="space-y-2 mb-6">
-							{#each topics as topic}
-								<div
-									class="flex items-center justify-between p-4 border border-gray-200 rounded-lg 
-										hover:bg-gray-50 transition-colors cursor-pointer"
-									on:click={() => toggleTopic(topic.id)}
-									on:keypress={(e) => e.key === 'Enter' && toggleTopic(topic.id)}
-									role="button"
-									tabindex="0"
-								>
-									<div class="flex items-center gap-3 flex-1">
-										<input
-											type="checkbox"
-											checked={selectedTopics.has(topic.id)}
-											on:change={() => toggleTopic(topic.id)}
-											class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
-											on:click={(e) => e.stopPropagation()}
-										/>
-										<div class="flex-1">
-											<h4 class="font-medium text-gray-900">{topic.name}</h4>
-											{#if topic.mastery_level !== undefined}
-												<div class="flex items-center gap-2 mt-1">
-													<div class="flex-1 max-w-xs bg-gray-200 rounded-full h-1.5">
-														<div
-															class="h-1.5 rounded-full {topic.mastery_level >= 80
-																? 'bg-green-500'
-																: topic.mastery_level >= 50
-																	? 'bg-yellow-500'
-																	: 'bg-indigo-600'}"
-															style="width: {topic.mastery_level}%"
-														></div>
-													</div>
-													<span class="text-xs text-gray-600">{topic.mastery_level}%</span>
+	/**
+	 * @param {string} tag
+	 */
+	async function removeTag(tag) {
+		try {
+			await supabaseAPI.guideTags.remove(guide.id, tag);
+			tags = tags.filter(t => t !== tag);
+		} catch (err) {
+			console.error('Error removing tag:', err);
+		}
+	}
+
+	async function loadTags() {
+		try {
+			const guideTags = await supabaseAPI.guideTags.getByGuide(guide.id);
+			tags = guideTags.map(t => t.tag);
+		} catch (err) {
+			console.error('Error loading tags:', err);
+		}
+	}
+
+	$: topics = guide.topics || [];
+	$: sessions = guide.sessions || [];
+	$: if (guide.id) loadTags();
+</script>
+
+<div class="bg-white rounded-lg shadow-sm border border-gray-200">
+	<!-- Header -->
+	<div class="px-6 py-4 border-b border-gray-200">
+		<div class="flex items-center justify-between">
+			<div class="flex items-center gap-3">
+				<button
+					on:click={handleBack}
+					class="text-gray-400 hover:text-gray-600 transition-colors"
+					title="Back to guides"
+				>
+					<span class="text-2xl">←</span>
+				</button>
+				<div>
+					<h2 class="text-2xl font-bold text-gray-900">{guide.title}</h2>
+					<p class="text-sm text-gray-500 mt-1">
+						{topics.length} {topics.length === 1 ? 'topic' : 'topics'} available
+					</p>
+				</div>
+			</div>
+			<div class="text-4xl">📚</div>
+		</div>
+	</div>
+
+	{#if loading}
+		<div class="px-6 py-12 flex justify-center">
+			<div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+		</div>
+	{:else}
+		<div class="p-6 space-y-6">
+			<!-- Topics Section -->
+			<div>
+				<div class="flex items-center justify-between mb-4">
+					<h3 class="text-lg font-semibold text-gray-900">Topics</h3>
+					<label class="flex items-center gap-2 cursor-pointer">
+						<input
+							type="checkbox"
+							checked={selectAll}
+							on:change={toggleSelectAll}
+							class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+						/>
+						<span class="text-sm text-gray-700">Select all</span>
+					</label>
+				</div>
+
+				{#if topics.length === 0}
+					<div class="text-center py-8 text-gray-500">
+						<div class="text-4xl mb-2">📝</div>
+						<p>No topics found for this guide</p>
+					</div>
+				{:else}
+					<div class="space-y-2 mb-6">
+						{#each topics as topic}
+							<div
+								class="flex items-center justify-between p-4 border border-gray-200 rounded-lg 
+									hover:bg-gray-50 transition-colors cursor-pointer"
+								on:click={() => toggleTopic(topic.id)}
+								on:keypress={(e) => e.key === 'Enter' && toggleTopic(topic.id)}
+								role="button"
+								tabindex="0"
+							>
+								<div class="flex items-center gap-3 flex-1">
+									<input
+										type="checkbox"
+										checked={selectedTopics.has(topic.id)}
+										on:change={() => toggleTopic(topic.id)}
+										class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+										on:click={(e) => e.stopPropagation()}
+									/>
+									<div class="flex-1">
+										<h4 class="font-medium text-gray-900">{topic.name}</h4>
+										{#if topic.mastery_level !== undefined}
+											<div class="flex items-center gap-2 mt-1">
+												<div class="flex-1 max-w-xs bg-gray-200 rounded-full h-1.5">
+													<div
+														class="h-1.5 rounded-full {topic.mastery_level >= 80
+															? 'bg-green-500'
+															: topic.mastery_level >= 50
+																? 'bg-yellow-500'
+																: 'bg-indigo-600'}"
+														style="width: {topic.mastery_level}%"
+													></div>
 												</div>
-											{/if}
-										</div>
-									</div>
-									<div class="text-sm text-gray-500">
-										{topic.problem_count || 0} {topic.problem_count === 1 ? 'problem' : 'problems'}
+												<span class="text-xs text-gray-600">{topic.mastery_level}%</span>
+											</div>
+										{/if}
 									</div>
 								</div>
-							{/each}
-						</div>
+								<div class="text-sm text-gray-500">
+									{topic.problem_count || 0} {topic.problem_count === 1 ? 'problem' : 'problems'}
+								</div>
+							</div>
+						{/each}
+					</div>
 
-						<!-- Start Practice Button -->
-						<button
-							on:click={startPractice}
-							disabled={!selectAll && selectedTopics.size === 0}
-							class="w-full px-6 py-3 bg-indigo-600 text-white font-medium rounded-md 
-								hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 
-								focus:ring-offset-2 transition-colors disabled:opacity-50 
-								disabled:cursor-not-allowed disabled:hover:bg-indigo-600"
-						>
-							{selectAll || selectedTopics.size === 0
-								? 'Choose Practice Mode →'
-								: `Practice ${selectedTopics.size} ${selectedTopics.size === 1 ? 'Topic' : 'Topics'} →`}
-						</button>
-					{/if}
-				</div>
+					<!-- Start Practice Button -->
+					<button
+						on:click={startPractice}
+						disabled={!selectAll && selectedTopics.size === 0}
+						class="w-full px-6 py-3 bg-indigo-600 text-white font-medium rounded-md 
+							hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 
+							focus:ring-offset-2 transition-colors disabled:opacity-50 
+							disabled:cursor-not-allowed disabled:hover:bg-indigo-600"
+					>
+						{selectAll || selectedTopics.size === 0
+							? 'Choose Practice Mode →'
+							: `Practice ${selectedTopics.size} ${selectedTopics.size === 1 ? 'Topic' : 'Topics'} →`}
+					</button>
+				{/if}
+			</div>
 			{/if}
 
 			<!-- Recent Sessions Section -->

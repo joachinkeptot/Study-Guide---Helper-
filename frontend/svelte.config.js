@@ -19,6 +19,13 @@ const config = {
       $lib: "src/lib",
     },
   },
+
+  // Suppress warnings about unknown props (like 'params' from SvelteKit internal routing)
+  onwarn: (warning, handler) => {
+    if (warning.code === "a11y-missing-attribute") return;
+    if (warning.message.includes("unknown prop")) return;
+    handler(warning);
+  },
 };
 
 export default config;

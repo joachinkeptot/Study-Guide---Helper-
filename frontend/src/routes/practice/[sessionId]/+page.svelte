@@ -3,18 +3,20 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { auth } from '$stores/auth-supabase';
-	import api from '$lib/api.js';
+	import supabaseAPI from '$lib/supabase-api.js';
 	import PracticeSession from '$lib/components/PracticeSession.svelte';
 	import SessionSummary from '$lib/components/SessionSummary.svelte';
 
 let loading = false;
 let error = '';
-	/** @type {{ id?: number, study_guide?: any, topic?: any } | null} */
+	/** @type {{ id?: number, study_guide?: any, topic?: any, study_guide_id?: number } | null} */
 	let session = null;
 	/** @type {any} */
 	let currentProblem = null;
 	/** @type {any} */
 	let sessionSummary = null;
+	/** @type {number[]} */
+	let topicIds = [];
 
 	let currentProblemIndex = 0;
 	let totalProblems = 0;
@@ -27,6 +29,12 @@ let error = '';
 	// Protect route
 	$: if (!$auth.isAuthenticated) {
 		goto('/login');
+	}
+
+	// Show problem when component is ready and we have a problem
+	$: if (practiceSessionComponent && currentProblem) {
+		console.log('Reactive: showing problem', currentProblem);
+		practiceSessionComponent.showProblem(currentProblem);
 	}
 
 	onMount(async () => {
@@ -45,7 +53,35 @@ let error = '';
 		loading = true;
 		error = '';
 		try {
-			// Session ID is used internally, just load first problem
+						if (sessionId === undefined) {
+							error = 'Session ID is missing.';
+							return;
+						}
+			
+			// Fetch session details to get study_guide_id
+			const sessionData = await supabaseAPI.supabase
+				.from('practice_sessions')
+				.select('id, study_guide_id')
+				.eq('id', parseInt(sessionId))
+				.single();
+			
+			if (sessionData.error) throw sessionData.error;
+			session = sessionData.data;
+
+			// Fetch all topic IDs for this study guide
+			const topicsData = await supabaseAPI.supabase
+				.from('topics')
+				.select('id')
+				.eq('study_guide_id', session.study_guide_id);
+			
+			if (topicsData.error) throw topicsData.error;
+			topicIds = topicsData.data.map((t) => t.id);
+
+			if (topicIds.length === 0) {
+				throw new Error('No topics found for this study guide');
+			}
+
+			// Load first problem
 			totalProblems = 20; // Default to 20 problems per session
 			await loadNextProblem();
 		} catch (err) {
@@ -56,8 +92,15 @@ let error = '';
 	}
 
 	async function loadNextProblem() {
+					if (sessionId === undefined) {
+						error = 'Session ID is missing.';
+						return;
+					}
+			
 		try {
-			const response = await api.get(`/api/practice/next-problem?session_id=${sessionId}`);
+			const response = await supabaseAPI.practice.getNextProblem(parseInt(sessionId), topicIds);
+			console.log('Got problem response:', response);
+			
 			if (!response || !response.problem) {
 				// Guard against empty 200 responses
 				error = 'No problem returned from server. Please try again or end the session.';
@@ -66,7 +109,12 @@ let error = '';
 			}
 			currentProblem = response.problem;
 			currentProblemIndex++;
+			
+			console.log('Current problem set:', currentProblem);
+			console.log('Component ref:', practiceSessionComponent);
 
+			// The component will react to currentProblem changing
+			// Also call showProblem if component is ready
 			if (practiceSessionComponent) {
 				practiceSessionComponent.showProblem(currentProblem);
 			}
@@ -95,15 +143,15 @@ let error = '';
 		}
 	}
 
-	async function loadSessionSummary() {
+		async function loadSessionSummary() {
 		try {
 			// End the session to get summary
 			if (sessionId === undefined) {
 				error = 'Session ID is missing.';
 				return;
 			}
-		const response = await api.post('/api/practice/end', { session_id: parseInt(sessionId) });
-		sessionSummary = response.summary;
+		const response = await supabaseAPI.practice.endSession(parseInt(sessionId));
+		sessionSummary = response;
 	} catch {
 		// Fallback summary if endpoint fails
 		sessionSummary = {
@@ -113,7 +161,7 @@ let error = '';
 			};
 		}
 	}
-
+	
 	/**
 	 * @param {CustomEvent<{ problemId: number; answer: string; hintsUsed?: number }>} event
 	 */
@@ -125,11 +173,12 @@ let error = '';
 				error = 'Session ID is missing.';
 				return;
 			}
-			const feedback = await api.post('/api/practice/submit', {
-				session_id: parseInt(sessionId),
-				problem_id: problemId,
-				answer: answer
-			});
+			const feedback = await supabaseAPI.practice.submitAnswer(
+				parseInt(sessionId),
+				problemId,
+				answer,
+				hintsUsed
+			);
 
 			// Add hints_used count to feedback for display
 			if (practiceSessionComponent) {
@@ -142,9 +191,7 @@ let error = '';
 			const msg = e instanceof Error ? e.message : 'Failed to submit answer';
 			error = msg;
 		}
-	}
-
-	/**
+	}	/**
 	 * Handle hint request from practice session component
 	 */
 	async function handleHintRequest() {
@@ -198,7 +245,7 @@ let error = '';
 				error = 'Session ID is missing.';
 				return;
 			}
-			await api.post('/api/practice/end', { session_id: parseInt(sessionId) });
+			await supabaseAPI.practice.endSession(parseInt(sessionId));
 			await loadSessionSummary();
 		} catch (e) {
 			error = (/** @type {Error} */ (e)).message || 'Failed to end session';
@@ -272,7 +319,7 @@ let error = '';
 			on:continue={handleContinueStudying}
 			on:dashboard={handleBackToDashboard}
 		/>
-	{:else if currentProblem}
+	{:else if session}
 		<PracticeSession
 			bind:this={practiceSessionComponent}
 			{currentTopic}

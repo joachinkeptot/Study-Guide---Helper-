@@ -86,10 +86,12 @@
 	 * @param {any} problem
 	 */
 	export function showProblem(problem) {
+		console.log('PracticeSession.showProblem called with:', problem);
 		currentProblem = problem;
 		currentFeedback = null;
 		state = 'question';
 		isSubmitting = false;
+		console.log('Set isSubmitting to false, state:', state);
 		if (!currentProblem || currentProblem.id !== problem.id) {
 			revealedHints = []; // Reset hints when showing new problem
 		}
@@ -117,6 +119,13 @@
 	 */
 	export function setHintLoading(loading) {
 		isLoadingHint = loading;
+	}
+
+	/**
+	 * Get the number of hints used for the current problem
+	 */
+	export function getHintsUsed() {
+		return revealedHints.length;
 	}
 
 	$: progress = totalProblems > 0 ? (currentProblemIndex / totalProblems) * 100 : 0;
@@ -179,6 +188,7 @@
 		<div class="space-y-6">
 			{#if state === 'question' && currentProblem}
 				<div class="animate-slideIn">
+					{@debug isSubmitting, state, currentProblem}
 					<ProblemDisplay
 						problem={currentProblem}
 						disabled={isSubmitting}

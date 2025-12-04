@@ -8,15 +8,25 @@
 	import GuideCard from '$lib/components/GuideCard.svelte';
 	import GuideDetail from '$lib/components/GuideDetail.svelte';
 	import LoadingSkeleton from '$lib/components/LoadingSkeleton.svelte';
+	import StreakTracker from '$lib/components/StreakTracker.svelte';
+	import GuideFilter from '$lib/components/GuideFilter.svelte';
     import { extractTextFromPDF } from '$lib/pdf.js';
+
 
 	/** @type {any[]} */
 	let guides = [];
+	/** @type {any[]} */
+	let filteredGuides = [];
+	/** @type {string[]} */
+	let allTags = [];
 	let loading = true;
 	let uploadError = '';
 	let loadError = '';
 	/** @type {number | null} */
 	let processingGuideId = null;
+	let searchQuery = '';
+	/** @type {string | null} */
+	let selectedTag = null;
 	
 	/** @type {number | null} */
 	let selectedGuideId = null;
@@ -24,26 +34,53 @@
 	let selectedGuide = null;
 	let loadingDetail = false;
 
-	// Protect route - redirect on client after mount
-
-	onMount(async () => {
-		if (!$auth.isAuthenticated) return;
-		// Start loading guides immediately
-		loadGuides();
-	});
-
 	async function loadGuides() {
 		loading = true;
 		loadError = '';
 		try {
 			const data = await supabaseAPI.studyGuides.getAll();
 			guides = data || [];
+			
+			// Load all unique tags
+			const tags = await supabaseAPI.guideTags.getAllUserTags();
+			allTags = tags || [];
+			
+			// Also load tags for each guide
+			for (const guide of guides) {
+				const guideTags = await supabaseAPI.guideTags.getByGuide(guide.id);
+				guide.tags = guideTags.map(t => t.tag);
+			}
+			
+			applyFilters();
 		} catch (err) {
 			console.error('Load guides error:', err);
 			loadError = (/** @type {Error} */ (err)).message || 'Failed to load study guides';
 		} finally {
 			loading = false;
 		}
+	}
+
+	function applyFilters() {
+		filteredGuides = guides.filter(guide => {
+			// Search filter
+			const matchesSearch = !searchQuery || 
+				guide.title.toLowerCase().includes(searchQuery.toLowerCase());
+			
+			// Tag filter
+			const matchesTag = !selectedTag || 
+				(guide.tags && guide.tags.includes(selectedTag));
+			
+			return matchesSearch && matchesTag;
+		});
+	}
+
+	/**
+	 * @param {CustomEvent<{ tag: string | null; search: string }>} event
+	 */
+	function handleFilterChange(event) {
+		selectedTag = event.detail.tag;
+		searchQuery = event.detail.search;
+		applyFilters();
 	}
 
 	/**
@@ -117,7 +154,7 @@ Here's the content:
 ${content.substring(0, 10000)} ${content.length > 10000 ? '...(truncated)' : ''}
 
 Please analyze this content and:
-1. Identify 3-5 main topics covered in the material
+1. Identify ALL major topics covered in the material (typically 5-15 topics, but extract as many as are present)
 2. For each topic, create 3-5 practice questions (mix of multiple choice and short answer)
 
 Return your response in this exact JSON format:
@@ -222,8 +259,11 @@ Return your response in this exact JSON format:
 
 			// Create topics and problems
 			if (parsedContent.topics && Array.isArray(parsedContent.topics)) {
+				console.log(`Processing ${parsedContent.topics.length} topics from Claude response`);
+				
 				for (let i = 0; i < parsedContent.topics.length; i++) {
 					const topicData = parsedContent.topics[i];
+					console.log(`Processing topic ${i + 1}: ${topicData.name}`);
 					
 					// Create topic
 					const topic = await supabaseAPI.topics.create(
@@ -237,6 +277,8 @@ Return your response in this exact JSON format:
 
 					// Create problems for this topic
 					if (topicData.problems && Array.isArray(topicData.problems)) {
+						console.log(`Found ${topicData.problems.length} problems for topic ${topicData.name}`);
+						
 						const problems = topicData.problems.map((/** @type {any} */ p) => ({
 							topic_id: topic.id,
 							question_text: p.question,
@@ -248,10 +290,17 @@ Return your response in this exact JSON format:
 							hint_penalty: 0.1
 						}));
 
-						await supabaseAPI.problems.createBulk(problems);
-						console.log(`Created ${problems.length} problems for topic ${topic.name}`);
+						console.log('Inserting problems:', problems);
+						const insertedProblems = await supabaseAPI.problems.createBulk(problems);
+						console.log(`✓ Successfully created ${insertedProblems.length} problems for topic ${topic.name}`);
+					} else {
+						console.warn(`No problems array found for topic ${topicData.name}`);
 					}
 				}
+				
+				console.log('✓ All topics and problems created successfully!');
+			} else {
+				console.error('parsedContent.topics is not an array:', parsedContent);
 			}
 
 			console.log('Study guide processing complete!');
@@ -327,12 +376,12 @@ Return your response in this exact JSON format:
 	}
 
 	/**
-	 * @param {CustomEvent<{ guideId: number; topicIds: number[] }>} event
+	 * @param {CustomEvent<{ guideId: number; topicIds: number[]; options?: any }>} event
 	 */
 	async function handleStartPractice(event) {
-		const { guideId } = event.detail;
+		const { guideId, options } = event.detail;
 		try {
-			const sessionData = await supabaseAPI.practice.startSession(guideId);
+			const sessionData = await supabaseAPI.practice.startSession(guideId, options || {});
 			goto(`/practice/${sessionData.id}`);
 		} catch (err) {
 			console.error('Start practice error:', err);
@@ -420,13 +469,27 @@ Return your response in this exact JSON format:
 			<GuideDetail
 				guide={selectedGuide}
 				loading={loadingDetail}
-				on:startPractice={handleStartPractice}
 				on:back={handleBack}
+				on:startPractice={handleStartPractice}
 			/>
 		{:else}
 			<!-- Dashboard View -->
 			<div>
-				<h1 class="text-3xl font-bold text-gray-900 mb-6">My Study Guides</h1>
+				<!-- Streak Tracker -->
+				<div class="mb-6">
+					<StreakTracker />
+				</div>
+
+				<!-- Math Solver Link -->
+				<div class="mb-8">
+					<a
+						href="/math-solver"
+						class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all"
+					>
+						<span class="text-xl">🧮</span>
+						<span>Math Solver</span>
+					</a>
+				</div>
 
 				<!-- Upload Section -->
 				<div class="mb-8">
@@ -443,14 +506,39 @@ Return your response in this exact JSON format:
 				<div>
 					<h2 class="text-xl font-semibold text-gray-900 mb-4">Your Study Guides</h2>
 
+					<!-- Filter Bar -->
+					{#if guides.length > 0}
+						<GuideFilter 
+							{allTags}
+							{selectedTag}
+							{searchQuery}
+							on:filterChange={handleFilterChange}
+						/>
+					{/if}
+
 					{#if loadError}
 						<div class="rounded-md bg-red-50 border border-red-200 p-4 mb-6">
 							<p class="text-sm text-red-800">{loadError}</p>
 						</div>
 					{/if}
 
-				{#if loading}
-					<LoadingSkeleton type="card" count={3} />
+					{#if loading}
+						<LoadingSkeleton type="card" count={3} />
+					{:else if filteredGuides.length === 0 && (searchQuery || selectedTag)}
+						<!-- No results for filter -->
+						<div class="text-center py-16 bg-white rounded-lg shadow-sm border border-gray-200">
+							<div class="text-7xl mb-4">🔍</div>
+							<h3 class="text-2xl font-semibold text-gray-900 mb-2">No matches found</h3>
+							<p class="text-gray-600 mb-4">
+								Try adjusting your filters or search query
+							</p>
+							<button
+								on:click={() => { searchQuery = ''; selectedTag = null; applyFilters(); }}
+								class="text-indigo-600 hover:text-indigo-700 font-medium"
+							>
+								Clear filters
+							</button>
+						</div>
 					{:else if guides.length === 0}
 						<!-- Empty State -->
 						<div class="text-center py-16 bg-white rounded-lg shadow-sm border border-gray-200">
@@ -478,7 +566,7 @@ Return your response in this exact JSON format:
 					{:else}
 						<!-- Guides Grid -->
 						<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-							{#each guides as guide (guide.id)}
+							{#each filteredGuides as guide (guide.id)}
 								{#if processingGuideId === guide.id}
 									<!-- Show processing state -->
 									<div class="bg-white rounded-lg shadow-sm border border-indigo-200 p-6">

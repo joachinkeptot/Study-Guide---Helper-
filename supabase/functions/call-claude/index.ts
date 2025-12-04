@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.192.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { encode as encodeBase64 } from "https://deno.land/std@0.224.0/encoding/base64.ts";
+import { encodeBase64 } from "https://deno.land/std@0.224.0/encoding/base64.ts";
 import { 
   checkRateLimit, 
   createRateLimitHeaders, 
@@ -81,9 +81,8 @@ serve(async (req: Request) => {
         );
       }
 
-      const sb = createClient(supabaseUrl, supabaseServiceKey, {
-        global: { headers: { Authorization: req.headers.get("Authorization") || "" } },
-      });
+      // Create client with service role key (no user auth override for storage)
+      const sb = createClient(supabaseUrl, supabaseServiceKey);
 
       const { data: blob, error: dlErr } = await sb.storage
         .from(bucket)
@@ -91,7 +90,12 @@ serve(async (req: Request) => {
 
       if (dlErr) {
         return new Response(
-          JSON.stringify({ error: `Failed to download file: ${dlErr.message}` }),
+          JSON.stringify({ 
+            error: `Failed to download file from bucket '${bucket}' at path '${body.filePath}'`,
+            details: dlErr,
+            message: dlErr.message || "No error message provided",
+            statusCode: dlErr.statusCode || "unknown"
+          }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
@@ -113,8 +117,21 @@ serve(async (req: Request) => {
       const defaultUser =
         body.task === "extract_topics" || true
           ? `Please analyze the attached document and:
-1. Identify 3-5 main topics
-2. For each topic, create 3-5 practice questions (mix of multiple choice and short answer)
+1. Identify ALL major topics covered in the document (typically 5-15 topics, but extract as many as are present)
+2. For each topic, create 3-5 practice questions similar to college-level exam questions
+
+CRITICAL REQUIREMENTS:
+- Questions should be challenging and test deep understanding, not just memorization
+- For math/statistics problems: Include multi-step problems that require calculations
+- For conceptual problems: Test application, analysis, and evaluation (Bloom's Taxonomy higher levels)
+- Each explanation should include step-by-step solutions with detailed reasoning
+- For math problems: Show ALL calculation steps, intermediate values, and formulas used
+- Include 3 progressive hints that guide without giving away the answer
+
+PROBLEM TYPES:
+- multiple_choice: 4 options with one correct answer (include plausible distractors)
+- short_answer: Concise answer (1-3 words or a number)
+- free_response: Detailed explanation or multi-step solution required
 
 Return strictly valid JSON with this shape:
 {
@@ -124,16 +141,39 @@ Return strictly valid JSON with this shape:
       "description": "string",
       "problems": [
         {
-          "question": "string",
-          "type": "multiple_choice" | "short_answer",
-          "options": ["string", "string", "string", "string"],
+          "question": "string (college-level, exam-style question)",
+          "type": "multiple_choice" | "short_answer" | "free_response",
+          "options": ["string", "string", "string", "string"] (only for multiple_choice),
           "correct_answer": "string",
-          "explanation": "string"
+          "explanation": "string (detailed step-by-step solution with reasoning)",
+          "hints": [
+            "string (hint 1: conceptual nudge)",
+            "string (hint 2: formula or approach)",
+            "string (hint 3: first step of solution)"
+          ],
+          "difficulty": "medium" | "hard",
+          "tags": ["concept1", "concept2"] (key concepts tested)
         }
       ]
     }
   ]
-}`
+}
+
+EXAMPLES OF GOOD COLLEGE-LEVEL QUESTIONS:
+
+Math/Statistics:
+"A researcher collects a sample of 25 observations with a mean of 50 and standard deviation of 10. Calculate the 95% confidence interval for the population mean. (Use t-distribution, t₀.₀₂₅,₂₄ = 2.064)"
+
+Computer Science:
+"Given an unsorted array of n elements, analyze the time complexity of the following algorithm in Big-O notation and explain your reasoning: [algorithm description]"
+
+Physics:
+"A 2kg block slides down a 30° incline with a coefficient of kinetic friction of 0.3. Calculate the acceleration of the block and the time it takes to travel 5 meters."
+
+Chemistry:
+"Calculate the pH of a buffer solution containing 0.1M acetic acid (Ka = 1.8 × 10⁻⁵) and 0.15M sodium acetate."
+
+Generate problems at this level of rigor and complexity.`
           : prompt || "Analyze the attached document.";
 
       anthropicPayload = {
@@ -143,18 +183,20 @@ Return strictly valid JSON with this shape:
         messages: [
           {
             role: "user",
-            content: defaultUser,
-          },
-        ],
-        attachments: [
-          {
-            type: "document",
-            title: fileName,
-            source: {
-              type: "base64",
-              media_type: mediaType,
-              data: b64,
-            },
+            content: [
+              {
+                type: "document",
+                source: {
+                  type: "base64",
+                  media_type: mediaType,
+                  data: b64,
+                },
+              },
+              {
+                type: "text",
+                text: defaultUser,
+              },
+            ],
           },
         ],
       };

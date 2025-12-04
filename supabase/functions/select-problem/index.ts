@@ -158,7 +158,7 @@ serve(async (req: Request) => {
       selectedProblem = problems[Math.floor(Math.random() * problems.length)];
     }
 
-    // Format response (don't include correct answer or hints in initial response)
+    // Format response (don't include correct answer in initial response)
     const response = {
       problem: {
         id: selectedProblem.id,
@@ -167,6 +167,7 @@ serve(async (req: Request) => {
         problem_type: selectedProblem.problem_type,
         options: selectedProblem.options,
         explanation: selectedProblem.explanation,
+        hints: selectedProblem.hints || [],
         hint_count: Array.isArray(selectedProblem.hints)
           ? selectedProblem.hints.length
           : 0,

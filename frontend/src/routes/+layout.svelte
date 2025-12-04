@@ -8,6 +8,7 @@
 	import { logger } from '$lib/logger';
 	import '../app.css';
 
+
 	// Validate environment variables on app load
 	try {
 		validateEnv();
