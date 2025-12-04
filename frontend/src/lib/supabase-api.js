@@ -703,33 +703,130 @@ export const mathSolverAPI = {
 };
 
 /**
- * Simple Practice API (via Edge Function)
+ * Simple Practice API (via Edge Function) - ENHANCED VERSION
  */
 export const simplePracticeAPI = {
   /**
-   * Generate a simple practice problem for any topic
+   * Generate a simple practice problem for any topic with advanced features
    * @param {string} topic - The topic to generate a problem about
-   * @param {string[]} recentProblems - Array of recent question texts to avoid duplicates
-   * @param {boolean} preferMultiPart - Whether to prefer multi-part questions
+   * @param {object} options - Generation options
+   * @param {string[]} options.recentProblems - Array of recent question texts to avoid duplicates
+   * @param {boolean} options.preferMultiPart - Whether to prefer multi-part questions
+   * @param {'easy'|'medium'|'hard'|'college'} options.difficulty - Difficulty level (default: 'college')
+   * @param {number} options.numOptions - Number of answer options (2-6, default: 4)
+   * @param {boolean} options.includeVisuals - Whether to include visual content (default: false)
+   * @param {'surface'|'intermediate'|'deep'} options.conceptualDepth - Depth of conceptual understanding (default: 'intermediate')
+   * @param {'theoretical'|'applied'|'mixed'} options.problemStyle - Style of problem (default: 'mixed')
    */
-  generateProblem: async (
-    topic,
-    recentProblems = [],
-    preferMultiPart = false
-  ) => {
-    const { data, error } = await supabase.functions.invoke(
-      "generate-simple-problem",
-      {
-        body: {
-          topic,
-          recentProblems,
-          preferMultiPart,
-        },
-      }
-    );
+  generateProblem: async (topic, options = {}) => {
+    const {
+      recentProblems = [],
+      preferMultiPart = false,
+      difficulty = "college",
+      numOptions = 4,
+      includeVisuals = false,
+      conceptualDepth = "intermediate",
+      problemStyle = "mixed",
+    } = options;
 
-    if (error) throw error;
-    return data;
+    // Validate inputs before sending to edge function
+    if (!topic || typeof topic !== "string" || topic.trim().length === 0) {
+      throw new Error("Valid topic is required");
+    }
+
+    if (numOptions < 2 || numOptions > 6) {
+      throw new Error("numOptions must be between 2 and 6");
+    }
+
+    const validDifficulties = ["easy", "medium", "hard", "college"];
+    if (!validDifficulties.includes(difficulty)) {
+      throw new Error(
+        `difficulty must be one of: ${validDifficulties.join(", ")}`
+      );
+    }
+
+    const validDepths = ["surface", "intermediate", "deep"];
+    if (!validDepths.includes(conceptualDepth)) {
+      throw new Error(
+        `conceptualDepth must be one of: ${validDepths.join(", ")}`
+      );
+    }
+
+    const validStyles = ["theoretical", "applied", "mixed"];
+    if (!validStyles.includes(problemStyle)) {
+      throw new Error(`problemStyle must be one of: ${validStyles.join(", ")}`);
+    }
+
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        "generate-simple-problem",
+        {
+          body: {
+            topic: topic.trim(),
+            recentProblems: Array.isArray(recentProblems) ? recentProblems : [],
+            preferMultiPart,
+            difficulty,
+            numOptions,
+            includeVisuals,
+            conceptualDepth,
+            problemStyle,
+          },
+        }
+      );
+
+      if (error) {
+        // Provide more helpful error messages
+        const errorMsg = error.message || "Unknown error occurred";
+        if (errorMsg.includes("Failed to parse")) {
+          throw new Error(
+            "Failed to generate valid problem. Please try again."
+          );
+        }
+        if (errorMsg.includes("API")) {
+          throw new Error(
+            "Problem generation service is temporarily unavailable. Please try again."
+          );
+        }
+        throw error;
+      }
+
+      // Validate the response structure
+      if (!data) {
+        throw new Error("No problem data received from server");
+      }
+
+      // Validate single-part structure
+      const isSinglePart =
+        data.question &&
+        Array.isArray(data.options) &&
+        data.options.length >= 2 &&
+        data.correct_answer &&
+        data.explanation;
+
+      // Validate multi-part structure
+      const isMultiPart =
+        Array.isArray(data.parts) &&
+        data.parts.length > 0 &&
+        data.parts.every(
+          (part) =>
+            part.prompt &&
+            Array.isArray(part.options) &&
+            part.options.length >= 2 &&
+            part.correct_answer &&
+            part.explanation
+        );
+
+      if (!isSinglePart && !isMultiPart) {
+        console.error("Invalid problem structure received:", data);
+        throw new Error("Received invalid problem structure from server");
+      }
+
+      return data;
+    } catch (err) {
+      // Log the error for debugging
+      console.error("Error generating problem:", err);
+      throw err;
+    }
   },
 };
 
@@ -750,16 +847,12 @@ export const userStatsAPI = {
       .from("user_stats")
       .select("*")
       .eq("user_id", user.id)
-      .maybeSingle(); // Use maybeSingle() instead of single() to handle 0 results gracefully
+      .maybeSingle();
 
-    // Don't throw on 404/PGRST116 - it's expected for new users
-    // Just silently return defaults without logging
     if (error && error.code !== "PGRST116") {
-      // Log unexpected errors only
       console.warn("Unexpected error fetching user stats:", error.message);
     }
 
-    // If no record exists, create one with defaults to avoid future 404s
     if (!data) {
       const { data: newStats, error: insertError } = await supabase
         .from("user_stats")
@@ -773,7 +866,6 @@ export const userStatsAPI = {
         .select()
         .maybeSingle();
 
-      // If insert succeeds, return the new record
       if (newStats && !insertError) {
         return {
           currentStreak: newStats.current_streak || 0,
@@ -783,7 +875,6 @@ export const userStatsAPI = {
         };
       }
 
-      // If insert fails (e.g., race condition), just return defaults
       return {
         currentStreak: 0,
         longestStreak: 0,
@@ -866,7 +957,6 @@ export const guideTagsAPI = {
     } = await supabase.auth.getUser();
     if (!user) throw new Error("Not authenticated");
 
-    // Step 1: get user's study guide IDs
     const { data: guides, error: guidesError } = await supabase
       .from("study_guides")
       .select("id")
@@ -879,7 +969,6 @@ export const guideTagsAPI = {
       return [];
     }
 
-    // Step 2: fetch tags for those guides
     const { data: tagsData, error: tagsError } = await supabase
       .from("guide_tags")
       .select("tag, study_guide_id")
