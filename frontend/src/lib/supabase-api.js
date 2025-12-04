@@ -703,6 +703,37 @@ export const mathSolverAPI = {
 };
 
 /**
+ * Simple Practice API (via Edge Function)
+ */
+export const simplePracticeAPI = {
+  /**
+   * Generate a simple practice problem for any topic
+   * @param {string} topic - The topic to generate a problem about
+   * @param {string[]} recentProblems - Array of recent question texts to avoid duplicates
+   * @param {boolean} preferMultiPart - Whether to prefer multi-part questions
+   */
+  generateProblem: async (
+    topic,
+    recentProblems = [],
+    preferMultiPart = false
+  ) => {
+    const { data, error } = await supabase.functions.invoke(
+      "generate-simple-problem",
+      {
+        body: {
+          topic,
+          recentProblems,
+          preferMultiPart,
+        },
+      }
+    );
+
+    if (error) throw error;
+    return data;
+  },
+};
+
+/**
  * User Stats API (streaks, daily goals)
  */
 export const userStatsAPI = {
@@ -907,6 +938,7 @@ const supabaseAPI = {
   progress: progressAPI,
   claude: claudeAPI,
   mathSolver: mathSolverAPI,
+  simplePractice: simplePracticeAPI,
   userStats: userStatsAPI,
   guideTags: guideTagsAPI,
   weakAreas: weakAreasAPI,
