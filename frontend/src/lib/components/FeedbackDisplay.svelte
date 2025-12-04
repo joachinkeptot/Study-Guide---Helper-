@@ -24,6 +24,7 @@
 	}
 
 	function handleNext() {
+		if (disabled) return; // Prevent duplicate submissions
 		dispatch('next', { confidence });
 		// Reset for next problem
 		confidence = 0;
@@ -153,7 +154,16 @@
 			focus:ring-offset-2 transition-all
 			disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-indigo-600"
 	>
-		{confidence === 0 ? 'Rate your confidence to continue' : 'Next Problem →'}
+		{#if disabled && confidence > 0}
+			<span class="inline-flex items-center gap-2">
+				<div class="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+				Loading next problem...
+			</span>
+		{:else if confidence === 0}
+			Rate your confidence to continue
+		{:else}
+			Next Problem →
+		{/if}
 	</button>
 	{#if confidence > 0}
 		<p class="text-xs text-gray-500 mt-2 text-center">💡 Tip: Press Enter to continue</p>

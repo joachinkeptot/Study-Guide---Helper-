@@ -388,17 +388,50 @@ export const practiceAPI = {
     } = await supabase.auth.getUser();
     if (!user) throw new Error("Not authenticated");
 
-    const { data, error } = await supabase.functions.invoke("select-problem", {
-      body: {
-        userId: user.id,
-        sessionId,
-        topicIds,
-        excludeProblemIds,
-      },
-    });
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        "select-problem",
+        {
+          body: {
+            userId: user.id,
+            sessionId,
+            topicIds,
+            excludeProblemIds,
+          },
+        }
+      );
 
-    if (error) throw error;
-    return data;
+      if (error) throw error;
+      return data;
+    } catch (err) {
+      // Fallback: if Edge Function is missing (404) or not reachable, select a random problem locally
+      const msg = err?.message || String(err);
+      if (msg.includes("404") || msg.toLowerCase().includes("not found")) {
+        // Fetch candidate problems from selected topics, excluding already seen
+        let query = supabase
+          .from("problems")
+          .select("*")
+          .in("topic_id", Array.isArray(topicIds) ? topicIds : []);
+        if (Array.isArray(excludeProblemIds) && excludeProblemIds.length > 0) {
+          query = query.not("id", "in", `(${excludeProblemIds.join(",")})`);
+        }
+        const { data: problems, error: pErr } = await query;
+        if (pErr) throw pErr;
+        const list = Array.isArray(problems) ? problems : [];
+        if (list.length === 0) {
+          throw new Error("No problems available for the selected topics.");
+        }
+        // Pick a random problem
+        const idx = Math.floor(Math.random() * list.length);
+        const problem = list[idx];
+        // Hide answer in response similar to function contract
+        const safeProblem = { ...problem };
+        delete safeProblem.correct_answer;
+        return { problem: safeProblem };
+      }
+      // Re-throw other errors
+      throw err;
+    }
   },
 
   /**

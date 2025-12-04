@@ -6,6 +6,9 @@
 	import api from '$lib/supabase-api';
 	import AddTopicModal from '$lib/components/AddTopicModal.svelte';
 
+	// Accept params prop from SvelteKit (suppresses warning)
+	export let params = {};
+
 	/** @type {{ id: number; title: string; description?: string; content?: string; created_at: string; topic?: string; topics?: any[] } | null} */
 	let guide = null;
 	let loading = true;

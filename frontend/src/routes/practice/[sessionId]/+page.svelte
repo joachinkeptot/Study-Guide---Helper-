@@ -7,9 +7,12 @@
 	import PracticeSession from '$lib/components/PracticeSession.svelte';
 	import SessionSummary from '$lib/components/SessionSummary.svelte';
 
-let loading = false;
-let error = '';
-	/** @type {{ id?: number, study_guide?: any, topic?: any, study_guide_id?: number } | null} */
+	// Accept params prop from SvelteKit (suppresses warning)
+	export let params = {};
+
+	let loading = false;
+	let error = '';
+	/** @type {{ id?: number, study_guide?: any, topic?: any, study_guide_id?: number, current_problem_index?: number, last_problem_id?: number } | null} */
 	let session = null;
 	/** @type {any} */
 	let currentProblem = null;
@@ -31,6 +34,8 @@ let error = '';
 	let lastFeedback = null;
 	/** @type {number | null} */
 	let lastProblemId = null;
+	/** @type {number[]} */
+	let seenProblemIds = [];
 
 	/** @type {PracticeSession | null} */
 	let practiceSessionComponent = null;
@@ -69,15 +74,21 @@ $: sessionId = $page.params.sessionId;
 							return;
 						}
 			
-			// Fetch session details to get study_guide_id
+			// Fetch session details to get study_guide_id and progress
 			const sessionData = await supabaseAPI.supabase
 				.from('practice_sessions')
-				.select('id, study_guide_id')
+				.select('id, study_guide_id, current_problem_index, last_problem_id')
 				.eq('id', parseInt(sessionId))
 				.single();
 			
 			if (sessionData.error) throw sessionData.error;
 			session = sessionData.data;
+
+			// Restore progress if session was already started
+			if (session.current_problem_index && session.current_problem_index > 0) {
+				currentProblemIndex = session.current_problem_index;
+				lastProblemId = session.last_problem_id ?? null;
+			}
 
 			// Fetch all topic IDs for this study guide
 			const topicsData = await supabaseAPI.supabase
@@ -92,7 +103,7 @@ $: sessionId = $page.params.sessionId;
 				throw new Error('No topics found for this study guide');
 			}
 
-			// Load first problem
+			// Load first/next problem
 			totalProblems = 20; // Default to 20 problems per session
 			await loadNextProblem();
 		} catch (err) {
@@ -112,7 +123,7 @@ $: sessionId = $page.params.sessionId;
 			const response = await supabaseAPI.practice.getNextProblem(
 				parseInt(sessionId),
 				topicIds,
-				lastProblemId ? [lastProblemId] : []
+				seenProblemIds.length > 0 ? seenProblemIds : (lastProblemId ? [lastProblemId] : [])
 			);
 			console.log('Got problem response:', response);
 			
@@ -124,6 +135,10 @@ $: sessionId = $page.params.sessionId;
 			}
 			currentProblem = response.problem;
 			lastProblemId = currentProblem?.id ?? null;
+			if (lastProblemId) {
+				// Track problems we've already shown to avoid repeats
+				seenProblemIds = Array.from(new Set([...seenProblemIds, lastProblemId]));
+			}
 			currentProblemIndex++;
 			
 			console.log('Current problem set:', currentProblem);
@@ -156,6 +171,11 @@ $: sessionId = $page.params.sessionId;
 			}
 			// For other errors
 			error = errorMsg || 'Failed to load next problem';
+		}
+
+		// Always reset next-loading state if component exists
+		if (practiceSessionComponent) {
+			practiceSessionComponent.setNextLoading(false);
 		}
 	}
 
@@ -252,6 +272,11 @@ $: sessionId = $page.params.sessionId;
 	 * @param {CustomEvent<{confidence?: number}>} event
 	 */
 	async function handleNextProblem(event) {
+		// Disable interaction immediately
+		if (practiceSessionComponent) {
+			practiceSessionComponent.setNextLoading(true);
+		}
+
 		// Update confidence before loading next problem
 		try {
 			const confidence = event?.detail?.confidence ?? null;
@@ -268,10 +293,21 @@ $: sessionId = $page.params.sessionId;
 		} catch (err) {
 			console.warn('Confidence update failed:', err);
 		}
-		// Optionally send confidence rating to backend
-		// Note: Backend expects attempt_id, not problem_id
-		// This feature may not work correctly without storing the last attempt_id
-		// For now, skip confidence update and just load next problem
+
+		// Save progress to session before loading next problem
+		try {
+			if (sessionId !== undefined) {
+				await supabaseAPI.supabase
+					.from('practice_sessions')
+					.update({
+						current_problem_index: currentProblemIndex,
+						last_problem_id: lastProblemId
+					})
+					.eq('id', parseInt(sessionId));
+			}
+		} catch (err) {
+			console.warn('Failed to save session progress:', err);
+		}
 
 		// Load next problem
 		await loadNextProblem();

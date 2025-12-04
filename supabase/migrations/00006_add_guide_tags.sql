@@ -15,7 +15,8 @@ create table if not exists public.guide_tags (
 alter table public.guide_tags enable row level security;
 
 -- Policy: users can select their own guide tags
-create policy if not exists "guide_tags_select_own"
+drop policy if exists "guide_tags_select_own" on public.guide_tags;
+create policy "guide_tags_select_own"
   on public.guide_tags for select
   using (
     exists (
@@ -26,7 +27,8 @@ create policy if not exists "guide_tags_select_own"
   );
 
 -- Policy: users can insert tags for their own guides
-create policy if not exists "guide_tags_insert_own"
+drop policy if exists "guide_tags_insert_own" on public.guide_tags;
+create policy "guide_tags_insert_own"
   on public.guide_tags for insert
   with check (
     exists (
@@ -37,7 +39,8 @@ create policy if not exists "guide_tags_insert_own"
   );
 
 -- Policy: users can delete tags for their own guides
-create policy if not exists "guide_tags_delete_own"
+drop policy if exists "guide_tags_delete_own" on public.guide_tags;
+create policy "guide_tags_delete_own"
   on public.guide_tags for delete
   using (
     exists (

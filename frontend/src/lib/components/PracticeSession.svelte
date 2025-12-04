@@ -60,10 +60,14 @@
 		dispatch('submitAnswer', { ...event.detail, hintsUsed: revealedHints.length });
 	}
 
+	let isLoadingNext = false;
+
 	/**
 	 * @param {CustomEvent<{ confidence: number }>} event
 	 */
 	function handleNext(event) {
+		if (isLoadingNext) return; // Prevent duplicate clicks
+		isLoadingNext = true;
 		dispatch('nextProblem', event.detail);
 		state = 'question';
 		revealedHints = []; // Reset hints for next problem
@@ -91,6 +95,7 @@
 		currentFeedback = null;
 		state = 'question';
 		isSubmitting = false;
+		isLoadingNext = false; // Reset loading state
 		console.log('Set isSubmitting to false, state:', state);
 		if (!currentProblem || currentProblem.id !== problem.id) {
 			revealedHints = []; // Reset hints when showing new problem
@@ -126,6 +131,14 @@
 	 */
 	export function getHintsUsed() {
 		return revealedHints.length;
+	}
+
+	/**
+	 * Set loading state for next button
+	 * @param {boolean} loading
+	 */
+	export function setNextLoading(loading) {
+		isLoadingNext = loading;
 	}
 
 	$: progress = totalProblems > 0 ? (currentProblemIndex / totalProblems) * 100 : 0;
@@ -202,6 +215,7 @@
 				<div class="animate-slideIn">
 					<FeedbackDisplay
 						feedback={currentFeedback}
+						disabled={isLoadingNext}
 						on:next={handleNext}
 					/>
 				</div>
