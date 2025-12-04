@@ -95,10 +95,10 @@
 		currentFeedback = null;
 		state = 'question';
 		isSubmitting = false;
-		isLoadingNext = false; // Reset loading state
-		console.log('Set isSubmitting to false, state:', state);
+		isLoadingNext = false;
+		console.log('Set isSubmitting and isLoadingNext to false, state:', state);
 		if (!currentProblem || currentProblem.id !== problem.id) {
-			revealedHints = []; // Reset hints when showing new problem
+			revealedHints = [];
 		}
 	}
 

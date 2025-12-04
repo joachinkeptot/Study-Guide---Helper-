@@ -92,6 +92,7 @@
 	$: if (problem.id) {
 		answer = '';
 		selectedOption = null;
+		disabled = false;
 	}
 </script>
 

@@ -7,8 +7,8 @@
 	import PracticeSession from '$lib/components/PracticeSession.svelte';
 	import SessionSummary from '$lib/components/SessionSummary.svelte';
 
-	// Accept params prop from SvelteKit (suppresses warning)
-	export let params = {};
+	// Accept params for external reference only (use const to avoid unused-export warning)
+	export const params = {};
 
 	let loading = false;
 	let error = '';
@@ -133,13 +133,14 @@ $: sessionId = $page.params.sessionId;
 				currentProblem = null;
 				return;
 			}
+			// Update index first so progress bar updates
+			currentProblemIndex++;
 			currentProblem = response.problem;
 			lastProblemId = currentProblem?.id ?? null;
 			if (lastProblemId) {
 				// Track problems we've already shown to avoid repeats
 				seenProblemIds = Array.from(new Set([...seenProblemIds, lastProblemId]));
 			}
-			currentProblemIndex++;
 			
 			console.log('Current problem set:', currentProblem);
 			console.log('Component ref:', practiceSessionComponent);

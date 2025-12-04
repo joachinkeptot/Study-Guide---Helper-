@@ -6,8 +6,8 @@
 	import api from '$lib/supabase-api';
 	import AddTopicModal from '$lib/components/AddTopicModal.svelte';
 
-	// Accept params prop from SvelteKit (suppresses warning)
-	export let params = {};
+	// Accept params prop from SvelteKit (suppress unused export warning)
+	export const params = {};
 
 	/** @type {{ id: number; title: string; description?: string; content?: string; created_at: string; topic?: string; topics?: any[] } | null} */
 	let guide = null;
@@ -150,7 +150,7 @@
 					<!-- Topics Section -->
 					<div class="mb-6">
 						<div class="flex justify-between items-center mb-4">
-							<h2 class="text-lg font-semibold text-gray-900">Topics</h2>
+							<h2 class="text-lg font-semibold text-gray-900">Topics ({guide.topics?.length || 0})</h2>
 							<button
 								on:click={() => (showAddTopicModal = true)}
 								class="px-3 py-1 text-sm font-medium text-indigo-600 hover:text-indigo-700 

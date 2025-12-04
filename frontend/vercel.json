@@ -1,29 +1,4 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "build"
-      }
-    }
-  ],
-  "routes": [
-    {
-      "src": "/[^.]+",
-      "dest": "/",
-      "status": 200
-    }
-  ],
-  "env": {
-    "PUBLIC_API_URL": "@api_url"
-  },
-  "build": {
-    "env": {
-      "PUBLIC_API_URL": "@api_url"
-    }
-  },
   "headers": [
     {
       "source": "/(.*)",
