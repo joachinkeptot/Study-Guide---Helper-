@@ -20,9 +20,10 @@
 	onMount(async () => {
 		if (!$auth.isAuthenticated) return;
 
-		try {
+		async function refresh() {
+			try {
 			// Fetch sessions via Supabase and compute overview locally
-			const allSessions = await supabaseAPI.progress.getSessions();
+				const allSessions = await supabaseAPI.progress.getSessions();
 			sessions = (allSessions || []).map(s => ({
 				id: s.id,
 				guide: s.study_guide,
@@ -48,11 +49,20 @@
 				total_problems_attempted: totalAttempted,
 				overall_accuracy: 0
 			};
-		} catch (err) {
-			error = (/** @type {Error} */ (err)).message || 'Failed to load progress data';
-		} finally {
-			loading = false;
+			} catch (err) {
+				error = (/** @type {Error} */ (err)).message || 'Failed to load progress data';
+			} finally {
+				loading = false;
+			}
 		}
+
+		await refresh();
+		const handler = async () => {
+			loading = true;
+			await refresh();
+		};
+		window.addEventListener('user-stats-updated', handler);
+		return () => window.removeEventListener('user-stats-updated', handler);
 	});
 
 	/**

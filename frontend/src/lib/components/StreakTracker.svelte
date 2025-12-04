@@ -9,6 +9,13 @@
 
 	onMount(async () => {
 		await loadStats();
+		// Refresh when practice updates user stats
+		const handler = async () => {
+			loading = true;
+			await loadStats();
+		};
+		window.addEventListener('user-stats-updated', handler);
+		return () => window.removeEventListener('user-stats-updated', handler);
 	});
 
 	async function loadStats() {
@@ -17,8 +24,7 @@
 			const data = await supabaseAPI.getUserStats();
 			stats = data;
 		} catch (err) {
-			console.error('Failed to load streak stats:', err);
-			// Set default stats on error so UI doesn't break
+			// Silently set default stats - this is expected for new users
 			stats = {
 				currentStreak: 0,
 				longestStreak: 0,
@@ -34,13 +40,13 @@
 	$: isGoalMet = stats && stats.questionsToday >= stats.dailyGoal;
 </script>
 
-<div class="bg-gradient-to-r from-orange-50 to-red-50 rounded-lg border border-orange-200 p-4">
+<div class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-indigo-200 p-4 shadow-sm">
 	{#if loading}
 		<div class="animate-pulse flex space-x-4">
-			<div class="h-12 w-12 bg-orange-200 rounded-lg"></div>
+			<div class="h-12 w-12 bg-indigo-200 rounded-lg"></div>
 			<div class="flex-1 space-y-2">
-				<div class="h-4 bg-orange-200 rounded w-3/4"></div>
-				<div class="h-3 bg-orange-200 rounded w-1/2"></div>
+				<div class="h-4 bg-indigo-200 rounded w-3/4"></div>
+				<div class="h-3 bg-indigo-200 rounded w-1/2"></div>
 			</div>
 		</div>
 	{:else if stats}
@@ -75,9 +81,9 @@
 						{stats.questionsToday}/{stats.dailyGoal}
 					</span>
 				</div>
-				<div class="w-full bg-orange-200 rounded-full h-2">
+				<div class="w-full bg-indigo-200 rounded-full h-2">
 					<div
-						class="h-2 rounded-full transition-all duration-500 {isGoalMet ? 'bg-green-500' : 'bg-orange-500'}"
+						class="h-2 rounded-full transition-all duration-500 {isGoalMet ? 'bg-green-500' : 'bg-indigo-500'}"
 						style="width: {progressPercent}%"
 					></div>
 				</div>

@@ -34,6 +34,18 @@
 	let selectedGuide = null;
 	let loadingDetail = false;
 
+	// Load guides when authenticated
+	onMount(async () => {
+		if ($auth.isAuthenticated) {
+			await loadGuides();
+		}
+	});
+
+	// Reactively load when auth state changes
+	$: if ($auth.isAuthenticated && guides.length === 0 && !loading && !loadError) {
+		loadGuides();
+	}
+
 	async function loadGuides() {
 		loading = true;
 		loadError = '';
@@ -45,10 +57,23 @@
 			const tags = await supabaseAPI.guideTags.getAllUserTags();
 			allTags = tags || [];
 			
-			// Also load tags for each guide
-			for (const guide of guides) {
-				const guideTags = await supabaseAPI.guideTags.getByGuide(guide.id);
-				guide.tags = guideTags.map(t => t.tag);
+			// Batch load tags for all guides in parallel
+			if (guides.length > 0) {
+				const tagPromises = guides.map(guide => 
+					supabaseAPI.guideTags.getByGuide(guide.id)
+						.then(guideTags => ({ id: guide.id, tags: guideTags.map(t => t.tag) }))
+						.catch(err => {
+							console.warn(`Failed to load tags for guide ${guide.id}:`, err);
+							return { id: guide.id, tags: [] };
+						})
+				);
+				const guideTagsResults = await Promise.all(tagPromises);
+				
+				// Map tags back to guides
+				guideTagsResults.forEach(result => {
+					const guide = guides.find(g => g.id === result.id);
+					if (guide) guide.tags = result.tags;
+				});
 			}
 			
 			applyFilters();

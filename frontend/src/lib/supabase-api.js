@@ -244,9 +244,10 @@ export const problemsAPI = {
    * Create a new problem
    */
   create: async (problemData) => {
+    const normalized = normalizeProblem(problemData);
     const { data, error } = await supabase
       .from("problems")
-      .insert(problemData)
+      .insert(normalized)
       .select()
       .single();
 
@@ -258,9 +259,12 @@ export const problemsAPI = {
    * Bulk create problems
    */
   createBulk: async (problems) => {
+    const normalized = Array.isArray(problems)
+      ? problems.map(normalizeProblem)
+      : problems;
     const { data, error } = await supabase
       .from("problems")
-      .insert(problems)
+      .insert(normalized)
       .select();
 
     if (error) throw error;
@@ -563,10 +567,39 @@ export const progressAPI = {
       query = query.eq("study_guide_id", studyGuideId);
     }
 
-    const { data, error } = await query;
-
+    const { data: sessions, error } = await query;
     if (error) throw error;
-    return data;
+
+    // Compute correctness per session for accuracy
+    const sessionIds = (sessions || []).map((s) => s.id);
+    if (sessionIds.length === 0) return sessions || [];
+
+    const { data: correctRows, error: correctErr } = await supabase
+      .from("problem_attempts")
+      .select("session_id")
+      .in("session_id", sessionIds)
+      .eq("is_correct", true);
+
+    if (correctErr) throw correctErr;
+    const correctMap = new Map();
+    (correctRows || []).forEach((r) => {
+      const sid = r.session_id;
+      correctMap.set(sid, (correctMap.get(sid) || 0) + 1);
+    });
+
+    return (sessions || []).map((s) => {
+      const total = s.attempts?.[0]?.count || 0;
+      const correct = correctMap.get(s.id) || 0;
+      const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0;
+      return {
+        ...s,
+        stats: {
+          total_problems: total,
+          correct_answers: correct,
+          accuracy,
+        },
+      };
+    });
   },
 };
 
@@ -849,3 +882,58 @@ const supabaseAPI = {
 };
 
 export default supabaseAPI;
+
+// Helpers
+function normalizeProblem(problem) {
+  const p = { ...problem };
+  // Normalize problem_type
+  const rawType = String(p.problem_type || "")
+    .trim()
+    .toLowerCase();
+  if (
+    ["mcq", "multiplechoice", "multiple_choice", "choice", "choices"].includes(
+      rawType
+    )
+  ) {
+    p.problem_type = "multiple_choice";
+  } else if (["short", "shortanswer", "short_answer"].includes(rawType)) {
+    p.problem_type = "short_answer";
+  } else if (["free", "free_response", "long", "essay"].includes(rawType)) {
+    p.problem_type = "free_response";
+  } else {
+    p.problem_type = rawType || "short_answer";
+  }
+
+  // Normalize options: parse if string, trim, dedupe, store as JSON array
+  if (p.options !== undefined) {
+    let arr = [];
+    if (typeof p.options === "string") {
+      try {
+        arr = JSON.parse(p.options);
+      } catch {
+        arr = [];
+      }
+    } else if (Array.isArray(p.options)) {
+      arr = p.options;
+    }
+    const seen = new Set();
+    const result = [];
+    for (const opt of arr) {
+      const norm = String(opt ?? "")
+        .trim()
+        .toLowerCase();
+      if (!seen.has(norm) && norm.length > 0) {
+        seen.add(norm);
+        result.push(String(opt ?? "").trim());
+      }
+    }
+    p.options = result;
+  }
+
+  // Ensure correct_answer is trimmed
+  if (p.correct_answer !== undefined && p.correct_answer !== null) {
+    p.correct_answer = String(p.correct_answer).trim();
+  }
+
+  return p;
+}

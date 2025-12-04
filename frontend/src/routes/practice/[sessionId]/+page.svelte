@@ -20,11 +20,22 @@ let error = '';
 
 	let currentProblemIndex = 0;
 	let totalProblems = 0;
+	/** 
+	 * @type {{
+	 *   is_correct?: boolean;
+	 *   hints_used?: number | any[];
+	 *   attempt_id?: number;
+	 *   [key: string]: any;
+	 * } | null}
+	 */
+	let lastFeedback = null;
+	/** @type {number | null} */
+	let lastProblemId = null;
 
 	/** @type {PracticeSession | null} */
 	let practiceSessionComponent = null;
 
-	$: sessionId = $page.params.sessionId;
+$: sessionId = $page.params.sessionId;
 
 	// Protect route
 	$: if (!$auth.isAuthenticated) {
@@ -96,9 +107,13 @@ let error = '';
 						error = 'Session ID is missing.';
 						return;
 					}
-			
+
 		try {
-			const response = await supabaseAPI.practice.getNextProblem(parseInt(sessionId), topicIds);
+			const response = await supabaseAPI.practice.getNextProblem(
+				parseInt(sessionId),
+				topicIds,
+				lastProblemId ? [lastProblemId] : []
+			);
 			console.log('Got problem response:', response);
 			
 			if (!response || !response.problem) {
@@ -108,6 +123,7 @@ let error = '';
 				return;
 			}
 			currentProblem = response.problem;
+			lastProblemId = currentProblem?.id ?? null;
 			currentProblemIndex++;
 			
 			console.log('Current problem set:', currentProblem);
@@ -181,12 +197,15 @@ let error = '';
 			);
 
 			// Add hints_used count to feedback for display
+			lastFeedback = feedback;
 			if (practiceSessionComponent) {
 				practiceSessionComponent.showFeedback({
 					...feedback,
 					hints_used: hintsUsed
 				});
 			}
+			// Notify other UI (e.g., streak/progress widgets) to refresh stats
+			window.dispatchEvent(new CustomEvent('user-stats-updated'));
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : 'Failed to submit answer';
 			error = msg;
@@ -229,7 +248,26 @@ let error = '';
 	/**
 	 * Handle loading next problem
 	 */
-	async function handleNextProblem() {
+	/**
+	 * @param {CustomEvent<{confidence?: number}>} event
+	 */
+	async function handleNextProblem(event) {
+		// Update confidence before loading next problem
+		try {
+			const confidence = event?.detail?.confidence ?? null;
+			if (lastFeedback && currentProblem && currentProblem.topic_id) {
+				await supabaseAPI.practice.updateConfidence(
+					currentProblem.topic_id,
+					Boolean(lastFeedback.is_correct),
+					/** @type {any} */ (confidence),
+					Array.isArray(lastFeedback.hints_used) ? lastFeedback.hints_used.length : (lastFeedback.hints_used || 0)
+				);
+				// Signal stats refresh after confidence update
+				window.dispatchEvent(new CustomEvent('user-stats-updated'));
+			}
+		} catch (err) {
+			console.warn('Confidence update failed:', err);
+		}
 		// Optionally send confidence rating to backend
 		// Note: Backend expects attempt_id, not problem_id
 		// This feature may not work correctly without storing the last attempt_id

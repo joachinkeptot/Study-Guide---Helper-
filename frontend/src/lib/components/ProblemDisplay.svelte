@@ -61,10 +61,30 @@
 	}
 
 	// Normalize type and parse options safely
-	$: normalizedType = (problem?.problem_type || '').toLowerCase();
-	$: parsedOptions = problem.options && typeof problem.options === 'string' 
-		? JSON.parse(problem.options) 
-		: (problem.options || []);
+	$: normalizedType = (() => {
+		const raw = String(problem?.problem_type || '').trim().toLowerCase();
+		// Map common variants to canonical types
+		if (['mcq','multiplechoice','multiple_choice','choice','choices'].includes(raw)) return 'multiple_choice';
+		if (['short','shortanswer','short_answer'].includes(raw)) return 'short_answer';
+		if (['free','free_response','long','essay'].includes(raw)) return 'free_response';
+		return raw || 'short_answer';
+	})();
+	$: parsedOptions = (() => {
+		const raw = problem.options && typeof problem.options === 'string'
+			? (() => { try { return JSON.parse(problem.options); } catch { return []; } })()
+			: (problem.options || []);
+		// Deduplicate and normalize options to avoid identical choices
+		const seen = new Set();
+		const result = [];
+		for (const opt of raw) {
+			const norm = String(opt ?? '').trim().toLowerCase();
+			if (!seen.has(norm) && norm.length > 0) {
+				seen.add(norm);
+				result.push(String(opt ?? '').trim());
+			}
+		}
+		return result;
+	})();
 
 	$: canSubmit = answer.trim().length > 0;
 
