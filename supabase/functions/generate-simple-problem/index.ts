@@ -15,10 +15,67 @@ serve(async (req) => {
   }
 
   try {
-    const { topic } = await req.json()
+    const { topic, recentProblems = [] } = await req.json()
 
     if (!topic) {
       throw new Error('Topic is required')
+    }
+
+    // Build the prompt with recent problems to avoid
+    let prompt = `Generate a multiple choice practice item about: ${topic}
+
+Return ONLY a JSON object with one of the following structures (no markdown around it):
+
+// Single-part question
+{
+  "question": "The question text",
+  "options": ["Option A", "Option B", "Option C", "Option D"],
+  "correct_answer": "Option A",
+  "explanation": "Brief explanation of why this is correct"
+}
+
+// Multi-part question (2-3 parts max)
+{
+  "question": "Overall stem or introduction (optional)",
+  "parts": [
+    {
+      "prompt": "Part A prompt",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correct_answer": "Option A",
+      "explanation": "Brief explanation for Part A"
+    },
+    {
+      "prompt": "Part B prompt",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correct_answer": "Option B",
+      "explanation": "Brief explanation for Part B"
+    }
+  ]
+}
+
+Guidelines:
+- College-level difficulty. Options must be distinct and plausible.
+- If multi-part is used, keep parts logically related but independently answerable.
+- Do not include any text outside the JSON.`
+
+    // If preferMultiPart is set, bias the prompt
+    if (typeof req.json === 'function') {
+      // Deno deploy compatibility: req.json is a function
+      const body = await req.json();
+      if (body.preferMultiPart) {
+        prompt += `\n\nIMPORTANT: Prefer the multi-part format unless the topic is unsuitable. If possible, generate a question with 2-3 related parts.`;
+      }
+    } else if (req.body && req.body.preferMultiPart) {
+      prompt += `\n\nIMPORTANT: Prefer the multi-part format unless the topic is unsuitable. If possible, generate a question with 2-3 related parts.`;
+    }
+
+    // Add context about recent problems to avoid duplicates
+    if (recentProblems.length > 0) {
+      prompt += `\n\nIMPORTANT: Generate a DIFFERENT question than these recent ones:\n`
+      recentProblems.forEach((/** @type {string} */ problem, /** @type {number} */ i) => {
+        prompt += `${i + 1}. ${problem}\n`
+      })
+      prompt += '\nMake sure your question covers a different aspect or concept within the topic.'
     }
 
     // Call Claude API to generate a problem
@@ -30,22 +87,12 @@ serve(async (req) => {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-3-5-sonnet-20241022',
+        model: 'claude-4-haiku-20250905',
         max_tokens: 1024,
         messages: [
           {
             role: 'user',
-            content: `Generate a multiple choice question about: ${topic}
-
-Return ONLY a JSON object with this exact structure (no markdown, no explanation):
-{
-  "question": "The question text",
-  "options": ["Option A", "Option B", "Option C", "Option D"],
-  "correct_answer": "Option A",
-  "explanation": "Brief explanation of why this is correct"
-}
-
-Make it college-level difficulty. Ensure options are distinct and plausible.`
+            content: prompt
           }
         ]
       })
@@ -74,8 +121,11 @@ Make it college-level difficulty. Ensure options are distinct and plausible.`
       throw new Error('Failed to parse AI response')
     }
 
-    // Validate the structure
-    if (!problemData.question || !problemData.options || !problemData.correct_answer || !problemData.explanation) {
+    // Validate the structure (support single or multi-part)
+    const isSingle = problemData && problemData.question && problemData.options && problemData.correct_answer && problemData.explanation;
+    const isMulti = problemData && Array.isArray(problemData.parts) && problemData.parts.length > 0 && problemData.parts.every((p: any) => p && p.prompt && Array.isArray(p.options) && typeof p.correct_answer === 'string' && typeof p.explanation === 'string');
+
+    if (!isSingle && !isMulti) {
       throw new Error('Invalid problem structure from AI')
     }
 

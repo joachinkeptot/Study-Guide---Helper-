@@ -42,7 +42,7 @@ npm run dev
 
 - Frontend: SvelteKit
 - Backend: Supabase Edge Functions
-- AI: Claude 3.5 Sonnet
+- AI: Claude Haiku 4.5
 
 ```bash
 cp .env.example .env
